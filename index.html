@@ -1,39 +1,39 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Polyrhythm Metronome</title>
-<link rel="stylesheet" href="styles.css" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Polyrhythm Metronome</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <h1>Polyrhythm Metronome</h1>
   <div class="container">
-    <label>Main Rhythm (Beats per measure / Beat note):</label>
+    <label>Main Rhythm (Beats / Note):</label>
     <div class="flex-row">
-      <input type="number" id="mainTop" min="1" value="4" /> /
-      <input type="number" id="mainBottom" min="1" value="4" />
+      <input type="number" id="mainTop" step="any" value="4" /> /
+      <input type="number" id="mainBottom" step="any" value="4" />
     </div>
 
     <label>Main Measures:</label>
-    <input type="number" id="mainMeasures" min="1" value="10" />
+    <input type="number" id="mainMeasures" value="10" />
 
     <label>Main BPM:</label>
-    <input type="number" id="mainBPM" min="30" max="600" value="120" />
+    <input type="number" id="mainBPM" value="120" />
 
-    <hr style="margin:25px 0; border-color: rgba(255 255 255 / 0.3)" />
+    <hr />
 
-    <label>Polyrhythm (Beats per measure / Beat note):</label>
+    <label>Polyrhythm (Beats / Note):</label>
     <div class="flex-row">
-      <input type="number" id="polyTop" min="1" value="6" /> /
-      <input type="number" id="polyBottom" min="1" value="8" />
+      <input type="number" id="polyTop" step="any" value="6" /> /
+      <input type="number" id="polyBottom" step="any" value="8" />
     </div>
 
     <label>Polyrhythm Measures:</label>
-    <input type="number" id="polyMeasures" min="1" value="8" />
+    <input type="number" id="polyMeasures" value="8" />
 
-    <label>Polyrhythm BPM: (calculated automatically)</label>
-    <input type="number" id="polyBPM" readonly style="background: #555; color:#eee; font-weight:700; text-align:center;" />
+    <label>Polyrhythm BPM:</label>
+    <input type="number" id="polyBPM" readonly />
 
     <button id="startStopBtn">Start</button>
     <div id="resultBPM"></div>
