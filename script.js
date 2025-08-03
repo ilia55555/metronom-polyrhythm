@@ -1,151 +1,103 @@
-// Audio context and sound setup
-const AudioContext = window.AudioContext || window.webkitAudioContext;
-const audioCtx = new AudioContext();
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
 function playClick(isDownBeat) {
   const osc = audioCtx.createOscillator();
-  const gainNode = audioCtx.createGain();
-
-  osc.connect(gainNode);
-  gainNode.connect(audioCtx.destination);
-
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
   osc.type = 'square';
   osc.frequency.value = isDownBeat ? 1000 : 700;
-
-  gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
-  gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
-
+  gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
   osc.start(audioCtx.currentTime);
   osc.stop(audioCtx.currentTime + 0.1);
 }
 
-// 🔁 ✅ محاسبه دقیق با در نظر گرفتن ارزش زمانی نت (مخرج کسر)
 function calculatePolyrhythmBPM(BPM1, top1, bottom1, measures1, top2, bottom2, measures2) {
-  const duration1 = (60 / BPM1) * (4 / bottom1); // مدت یک ضرب اصلی
-  const totalTime = top1 * measures1 * duration1; // کل زمان ریتم اصلی
-
-  const duration2 = totalTime / (top2 * measures2); // مدت یک ضرب پلی‌ریتم
-  const BPM2 = 60 / duration2 * (4 / bottom2); // محاسبه BPM متناسب با نت دوم
-
-  return BPM2;
+  const beatDur1 = (60 / BPM1) * (4 / bottom1);
+  const totalTime = top1 * measures1 * beatDur1;
+  const totalBeats2 = top2 * measures2;
+  const beatDur2 = totalTime / totalBeats2;
+  return 60 / beatDur2 * (4 / bottom2);
 }
 
-// UI Elements
-const mainTopInput = document.getElementById('mainTop');
-const mainBottomInput = document.getElementById('mainBottom');
-const mainMeasuresInput = document.getElementById('mainMeasures');
-const mainBPMInput = document.getElementById('mainBPM');
+const $ = id => document.getElementById(id);
+let isRunning = false, timerID, currentBeat = 0, currentMeasure = 0, inPoly = false;
 
-const polyTopInput = document.getElementById('polyTop');
-const polyBottomInput = document.getElementById('polyBottom');
-const polyMeasuresInput = document.getElementById('polyMeasures');
-const polyBPMInput = document.getElementById('polyBPM');
+function updateBPM() {
+  const b1 = parseFloat($("mainBottom").value);
+  const t1 = parseFloat($("mainTop").value);
+  const m1 = parseFloat($("mainMeasures").value);
+  const bpm1 = parseFloat($("mainBPM").value);
+  const b2 = parseFloat($("polyBottom").value);
+  const t2 = parseFloat($("polyTop").value);
+  const m2 = parseFloat($("polyMeasures").value);
 
-const startStopBtn = document.getElementById('startStopBtn');
-const resultBPMDiv = document.getElementById('resultBPM');
-
-let isRunning = false;
-let timerID = null;
-let currentBeat = 0;
-let currentMeasure = 0;
-let inPolyrhythm = false;
-
-function updatePolyBPM() {
-  const BPM1 = parseFloat(mainBPMInput.value);
-  const top1 = parseFloat(mainTopInput.value);
-  const bottom1 = parseFloat(mainBottomInput.value);
-  const measures1 = parseFloat(mainMeasuresInput.value);
-
-  const top2 = parseFloat(polyTopInput.value);
-  const bottom2 = parseFloat(polyBottomInput.value);
-  const measures2 = parseFloat(polyMeasuresInput.value);
-
-  if ([BPM1, top1, bottom1, measures1, top2, bottom2, measures2].some(isNaN)) return;
-
-  const bpm2 = calculatePolyrhythmBPM(BPM1, top1, bottom1, measures1, top2, bottom2, measures2);
-  polyBPMInput.value = bpm2.toFixed(2);
+  if ([b1, t1, m1, bpm1, b2, t2, m2].some(isNaN)) return;
+  $("polyBPM").value = calculatePolyrhythmBPM(bpm1, t1, b1, m1, t2, b2, m2).toFixed(2);
 }
 
-// Call initially
-updatePolyBPM();
+["mainTop", "mainBottom", "mainMeasures", "mainBPM", "polyTop", "polyBottom", "polyMeasures"]
+  .forEach(id => $(id).addEventListener("input", updateBPM));
 
-// Update poly BPM on input changes
-[
-  mainTopInput, mainBottomInput, mainMeasuresInput, mainBPMInput,
-  polyTopInput, polyBottomInput, polyMeasuresInput
-].forEach(inp => {
-  inp.addEventListener('input', updatePolyBPM);
-});
+updateBPM();
 
-// Metronome scheduling
-function startMetronome() {
-  if (audioCtx.state === 'suspended') audioCtx.resume();
-
+function start() {
+  if (audioCtx.state === "suspended") audioCtx.resume();
   isRunning = true;
-  startStopBtn.textContent = 'Stop';
-
-  currentBeat = 0;
-  currentMeasure = 0;
-  inPolyrhythm = false;
-
-  scheduleNext();
+  $("startStopBtn").textContent = "Stop";
+  currentBeat = currentMeasure = 0;
+  inPoly = false;
+  schedule();
 }
 
-function stopMetronome() {
+function stop() {
   isRunning = false;
-  startStopBtn.textContent = 'Start';
+  $("startStopBtn").textContent = "Start";
   clearTimeout(timerID);
 }
 
-function scheduleNext() {
-  const BPM1 = parseFloat(mainBPMInput.value);
-  const top1 = parseFloat(mainTopInput.value);
-  const bottom1 = parseFloat(mainBottomInput.value);
-  const measures1 = parseFloat(mainMeasuresInput.value);
+function schedule() {
+  const bpm1 = parseFloat($("mainBPM").value);
+  const b1 = parseFloat($("mainBottom").value);
+  const t1 = parseFloat($("mainTop").value);
+  const m1 = parseFloat($("mainMeasures").value);
 
-  const BPM2 = parseFloat(polyBPMInput.value);
-  const top2 = parseFloat(polyTopInput.value);
-  const bottom2 = parseFloat(polyBottomInput.value);
-  const measures2 = parseFloat(polyMeasuresInput.value);
+  const bpm2 = parseFloat($("polyBPM").value);
+  const b2 = parseFloat($("polyBottom").value);
+  const t2 = parseFloat($("polyTop").value);
+  const m2 = parseFloat($("polyMeasures").value);
 
-  let interval;
-
-  if (!inPolyrhythm) {
-    const duration1 = (60 / BPM1) * (4 / bottom1); // مدت ضرب اصلی
-    interval = duration1 * 1000;
+  let dur;
+  if (!inPoly) {
+    dur = (60 / bpm1) * (4 / b1);
     playClick(currentBeat === 0);
-
     currentBeat++;
-    if (currentBeat >= top1) {
+    if (currentBeat >= t1) {
       currentBeat = 0;
       currentMeasure++;
-      if (currentMeasure >= measures1) {
-        inPolyrhythm = true;
-        currentBeat = 0;
+      if (currentMeasure >= m1) {
+        inPoly = true;
         currentMeasure = 0;
       }
     }
   } else {
-    const duration2 = (60 / BPM2) * (4 / bottom2); // مدت ضرب پلی‌ریتم
-    interval = duration2 * 1000;
+    dur = (60 / bpm2) * (4 / b2);
     playClick(currentBeat === 0);
-
-I.B, [03.08.2025 16:11]
-currentBeat++;
-    if (currentBeat >= top2) {
+    currentBeat++;
+    if (currentBeat >= t2) {
       currentBeat = 0;
       currentMeasure++;
-      if (currentMeasure >= measures2) {
-        inPolyrhythm = false;
-        currentBeat = 0;
+      if (currentMeasure >= m2) {
+        inPoly = false;
         currentMeasure = 0;
       }
     }
   }
 
-  if (isRunning) timerID = setTimeout(scheduleNext, interval);
+  if (isRunning) timerID = setTimeout(schedule, dur * 1000);
 }
 
-startStopBtn.addEventListener('click', () => {
-  isRunning ? stopMetronome() : startMetronome();
+$("startStopBtn").addEventListener("click", () => {
+  isRunning ? stop() : start();
 });
