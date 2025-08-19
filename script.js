@@ -497,461 +497,266 @@ document.getElementById("calcAutoBtn").addEventListener("click", () => {
 
 
 
-// === Minimal Rhythm Display (Popup) + Playback-Synced Highlight + i18n-aware "Display" button ===
+// === Rhythm Display Countdown Add-on (keeps previous display code intact) ===
 (function () {
-  // Clean any older display UIs from previous snippets
-  const oldOverlayA = document.getElementById('settingsDisplayOverlay');
-  if (oldOverlayA) oldOverlayA.remove();
-  const oldStylesA = document.getElementById('settingsDisplayStyles');
-  if (oldStylesA) oldStylesA.remove();
-  const oldBtnA = document.getElementById('displayBtn');
-  if (oldBtnA && !oldBtnA.__keepDisplayBtn) oldBtnA.remove();
+  let rddcTimers = [];
+  let rddcRunning = false;
+  let rddcStartMs = null;
+  let rddcSeq = null;
 
-  // Add/restore translation entries for "Display" if translations exist
-  if (typeof translations === 'object' && translations.en && translations.fa) {
-    if (!translations.en["Display"]) translations.en["Display"] = "Display";
-    if (!translations.fa["Display"]) translations.fa["Display"] = "نمایش";
+  function rddcClearTimers() {
+    rddcTimers.forEach(t => clearTimeout(t));
+    rddcTimers = [];
   }
 
-  // State for highlight scheduling
-  let rdTimers = [];
-  let rdActiveIndex = -1;           // which row is active (0-based), -1 = none
-  let rdRowCells = [];              // array of [c1,c2,c3] per data row
-  let rdSequenceInfo = null;        // { items:[{pattern,bpm,repeats}], durationsMs:[], loopCount, totalOneLoopMs, totalAllMs }
-  let rdStartMs = null;             // Date.now() when schedule started
-  let rdRunning = false;
-
-  function injectStyles() {
-    if (document.getElementById('rhythmDisplayStyles')) return;
-    const style = document.createElement('style');
-    style.id = 'rhythmDisplayStyles';
-    style.textContent = `
-      #rhythmDisplayOverlay {
-        position: fixed;
-        inset: 0;
-        background: rgba(0,0,0,0.45);
-        display: none;
-        align-items: center;
-        justify-content: center;
-        z-index: 9999;
-      }
-      #rhythmDisplayModal {
-        background: #141414;
-        color: #fff;
-        max-width: 720px;
-        width: 92vw;
-        max-height: 85vh;
-        overflow: auto;
-        border: 1px solid var(--x);
-        box-shadow: 0 0 30px var(--x);
-        border-radius: 12px;
-        padding: 16px;
-      }
-      #rdControlBar {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 12px;
-        margin-bottom: 12px;
-      }
-      #rdPlayBtn, #rdStopBtn {
-        border: 1px solid var(--x);
-        color: var(--x);
-        background: transparent;
-        border-radius: 8px;
-        width: 40px;
-        height: 32px;
-        cursor: pointer;
-        font-size: 16px;
-      }
-      #rdPlayBtn:hover, #rdStopBtn:hover { background: var(--x); color: #000; }
-
-      #rhythmDisplayTable {
-        display: grid;
-        grid-template-columns: 1fr 1fr 1fr;
-        gap: 10px 40px;
-        justify-items: center;
-        align-items: center;
-        text-align: center;
-        margin: 0 auto;
-      }
-      .rd-header {
-        font-weight: 700;
-        color: var(--x);
-      }
-      .rd-cell {
-        white-space: pre;
-      }
-      .rd-data {
-        color: #8a8a8a;
-      }
-      .rd-active {
-        color: var(--x) !important;
-        font-weight: 700;
-      }
-
-      #displayBtn {
-        border: 1px solid var(--x);
-        color: var(--x);
-        background: transparent;
-        border-radius: 8px;
-        padding: 6px 12px;
-        cursor: pointer;
-        margin-left: 8px;
-      }
-      #displayBtn:hover { background: var(--x); color: #000; }
-    `;
-    document.head.appendChild(style);
-  }
-
-  function createUI() {
-    if (!document.getElementById('rhythmDisplayOverlay')) {
-      const overlay = document.createElement('div');
-      overlay.id = 'rhythmDisplayOverlay';
-
-      const modal = document.createElement('div');
-      modal.id = 'rhythmDisplayModal';
-
-      // Top control bar (icons only)
-      const controls = document.createElement('div');
-      controls.id = 'rdControlBar';
-
-      const playBtn = document.createElement('button');
-      playBtn.id = 'rdPlayBtn';
-      playBtn.type = 'button';
-      playBtn.setAttribute('aria-label', 'Play');
-      playBtn.textContent = '▶';
-
-      const stopBtnTop = document.createElement('button');
-      stopBtnTop.id = 'rdStopBtn';
-      stopBtnTop.type = 'button';
-      stopBtnTop.setAttribute('aria-label', 'Stop');
-      stopBtnTop.textContent = '■';
-
-      controls.appendChild(playBtn);
-      controls.appendChild(stopBtnTop);
-
-      const table = document.createElement('div');
-      table.id = 'rhythmDisplayTable';
-
-      modal.appendChild(controls);
-      modal.appendChild(table);
-      overlay.appendChild(modal);
-      document.body.appendChild(overlay);
-
-      overlay.addEventListener('click', e => {
-        if (e.target === overlay) overlay.style.display = 'none';
-      });
-      document.addEventListener('keydown', e => {
-        if (e.key === 'Escape') overlay.style.display = 'none';
-      });
-
-      // Hook overlay play/stop to main controls
-      playBtn.addEventListener('click', () => {
-        const startBtn = document.getElementById('startBtn');
-        if (startBtn) startBtn.click();
-      });
-      stopBtnTop.addEventListener('click', () => {
-        const stopBtn = document.getElementById('stopBtn');
-        if (stopBtn) stopBtn.click();
-      });
-    }
-
-    let button = document.getElementById('displayBtn');
-    if (!button) {
-      button = document.createElement('button');
-      button.id = 'displayBtn';
-      button.type = 'button';
-      button.textContent = 'Display';
-      button.__keepDisplayBtn = true;
-    } else {
-      button.remove();
-    }
-
-    const startBtn = document.getElementById('startBtn');
-    const stopBtn = document.getElementById('stopBtn');
-
-    if (stopBtn && stopBtn.parentNode) {
-      stopBtn.parentNode.insertBefore(button, stopBtn.nextSibling);
-    } else if (startBtn && startBtn.parentNode) {
-      startBtn.parentNode.insertBefore(button, startBtn.nextSibling);
-    } else {
-      document.body.appendChild(button);
-    }
-
-    button.addEventListener('click', () => {
-      renderRhythmDisplay();
-      // If already running, sync active row by elapsed time
-      if (rdRunning) {
-        rdSyncToElapsed();
-        rdApplyActiveIndex(rdActiveIndex);
-      }
-      document.getElementById('rhythmDisplayOverlay').style.display = 'flex';
-    });
-
-    // Apply translation to "Display" button if available
-    try {
-      const langSelect = document.getElementById('langSelect');
-      if (langSelect && typeof applyTranslation === 'function') {
-        applyTranslation(langSelect.value);
-      }
-    } catch (_) {}
-  }
-
-  function getRows() {
-    const rows = [];
-
-    const mainPatternInput = document.getElementById('mainPattern');
-    const mainRepeatsInput = document.getElementById('mainRepeats');
-    const mainBpmInput = document.getElementById('mainBPM');
-
-    const mainPatternStr = mainPatternInput ? String(mainPatternInput.value || '') : '';
-    const mainPatternArr = typeof parsePattern === 'function' ? parsePattern(mainPatternStr) : [];
-    const mainPatternDisplay = mainPatternArr.length ? mainPatternArr.join('+') : mainPatternStr.replace(/\s+/g, '');
-    const mainBpm = mainBpmInput ? String(mainBpmInput.value || '') : '';
-    const mainRepeats = mainRepeatsInput ? String(mainRepeatsInput.value || '') : '';
-    if (mainPatternDisplay || mainBpm || mainRepeats) {
-      rows.push([mainPatternDisplay, mainBpm, mainRepeats]);
-    }
-
-    const polyBoxes = document.querySelectorAll('.polyBox');
-    polyBoxes.forEach(box => {
-      const p = box.querySelector('.polyPattern');
-      const r = box.querySelector('.polyRepeats');
-      const b = box.querySelector('.polyBPM');
-
-      const pStr = p ? String(p.value || '') : '';
-      const arr = typeof parsePattern === 'function' ? parsePattern(pStr) : [];
-      const pat = arr.length ? arr.join('+') : pStr.replace(/\s+/g, '');
-      const bpm = b ? String(b.value || '') : '';
-      const rep = r ? String(r.value || '') : '';
-      rows.push([pat, bpm, rep]);
-    });
-
-    return rows;
-  }
-
-  function renderRhythmDisplay() {
-    const table = document.getElementById('rhythmDisplayTable');
-    if (!table) return;
-    table.innerHTML = '';
-    rdRowCells = [];
-
-    // Header (exactly these three words, centered)
-    ['پترن', 'سرعت', 'میزان'].forEach(text => {
-      const cell = document.createElement('div');
-      cell.className = 'rd-cell rd-header';
-      cell.textContent = text;
-      table.appendChild(cell);
-    });
-
-    // Data rows
-    const rows = getRows();
-    rows.forEach(([pat, bpm, rep]) => {
-      const c1 = document.createElement('div');
-      c1.className = 'rd-cell rd-data';
-      c1.textContent = pat || '';
-      const c2 = document.createElement('div');
-      c2.className = 'rd-cell rd-data';
-      c2.textContent = bpm || '';
-      const c3 = document.createElement('div');
-      c3.className = 'rd-cell rd-data';
-      c3.textContent = rep || '';
-      table.appendChild(c1);
-      table.appendChild(c2);
-      table.appendChild(c3);
-      rdRowCells.push([c1, c2, c3]);
-    });
-
-    // Apply current highlight state, if any
-    rdApplyActiveIndex(rdActiveIndex);
-  }
-
-  function sumPattern(arr) {
+  function rddcSumPattern(arr) {
     if (!Array.isArray(arr)) return 0;
     return arr.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0);
   }
 
-  function buildSequenceInfoFromDom() {
+  function rddcGetRepeatSteps(raw) {
+    const n = parseFloat(raw);
+    if (!isFinite(n) || n <= 0) return 0;
+    return Math.max(0, Math.round(n));
+  }
+
+  function rddcGetItemsFromInputs() {
     const items = [];
 
     // Main
     const mainPatternInput = document.getElementById('mainPattern');
     const mainRepeatsInput = document.getElementById('mainRepeats');
     const mainBpmInput = document.getElementById('mainBPM');
-
     const mainPatternArr = typeof parsePattern === 'function' ? parsePattern(mainPatternInput ? mainPatternInput.value : '') : [];
-    const mainRepeats = parseInt(mainRepeatsInput ? mainRepeatsInput.value : '0', 10) || 0;
+    const mainRepeatsRaw = mainRepeatsInput ? mainRepeatsInput.value : '0';
     const mainBpm = parseFloat(mainBpmInput ? mainBpmInput.value : '0') || 0;
-    items.push({ pattern: mainPatternArr, repeats: mainRepeats, bpm: mainBpm });
+    items.push({
+      pattern: mainPatternArr,
+      repeatsRaw: mainRepeatsRaw,
+      bpm: mainBpm
+    });
 
     // Polys
     const polyBoxes = document.querySelectorAll('.polyBox');
     polyBoxes.forEach(box => {
-      const arr = typeof parsePattern === 'function' ? parsePattern((box.querySelector('.polyPattern') || {}).value || '') : [];
-      const repeats = parseInt((box.querySelector('.polyRepeats') || {}).value || '0', 10) || 0;
+      const patt = (box.querySelector('.polyPattern') || {}).value || '';
+      const arr = typeof parsePattern === 'function' ? parsePattern(patt) : [];
+      const repeatsRaw = (box.querySelector('.polyRepeats') || {}).value || '0';
       const bpm = parseFloat((box.querySelector('.polyBPM') || {}).value || '0') || 0;
-      items.push({ pattern: arr, repeats, bpm });
+      items.push({
+        pattern: arr,
+        repeatsRaw,
+        bpm
+      });
     });
 
-    const durationsMs = items.map(it => {
-      const ticksPerRepeat = sumPattern(it.pattern);
+    return items;
+  }
+
+  function rddcBuildSequence() {
+    const items = rddcGetItemsFromInputs();
+    const durationsMs = [];
+    const repeatSteps = [];
+    const originalRepeatsText = [];
+
+    for (const it of items) {
+      const ticksPerRepeat = rddcSumPattern(it.pattern);
+      const repeatsNum = parseFloat(it.repeatsRaw) || 0;
       const beatLen = it.bpm > 0 ? (60 / it.bpm) : 0;
-      const totalTicks = ticksPerRepeat * (it.repeats > 0 ? it.repeats : 0);
+      const totalTicks = ticksPerRepeat * (repeatsNum > 0 ? repeatsNum : 0);
       const ms = totalTicks * beatLen * 1000;
-      return Math.max(0, Math.round(ms));
-    });
+      durationsMs.push(Math.max(0, Math.round(ms)));
+      repeatSteps.push(rddcGetRepeatSteps(it.repeatsRaw));
+      originalRepeatsText.push(String(it.repeatsRaw || ''));
+    }
 
     const loopCount = parseInt((document.getElementById('loopCount') || {}).value || '1', 10) || 1;
     const totalOneLoopMs = durationsMs.reduce((a, b) => a + b, 0);
     const totalAllMs = totalOneLoopMs * loopCount;
 
-    return { items, durationsMs, loopCount, totalOneLoopMs, totalAllMs };
+    return { items, durationsMs, repeatSteps, originalRepeatsText, loopCount, totalOneLoopMs, totalAllMs };
   }
 
-  function rdClearTimers() {
-    rdTimers.forEach(t => clearTimeout(t));
-    rdTimers = [];
-  }
-
-  function rdResetHighlight() {
-    rdActiveIndex = -1;
-    if (rdRowCells && rdRowCells.length) {
-      rdRowCells.forEach(cells => {
-        cells.forEach(c => {
-          c.classList.remove('rd-active');
-          if (!c.classList.contains('rd-data')) c.classList.add('rd-data');
-        });
+  function rddcGetTableRows() {
+    const table = document.getElementById('rhythmDisplayTable');
+    if (!table) return [];
+    const nodes = Array.from(table.children || []);
+    if (nodes.length < 3) return []; // header only or empty
+    const data = nodes.slice(3);
+    const rows = [];
+    for (let i = 0; i < data.length; i += 3) {
+      rows.push({
+        patternCell: data[i] || null,
+        bpmCell: data[i + 1] || null,
+        repeatsCell: data[i + 2] || null
       });
     }
+    return rows;
   }
 
-  function rdApplyActiveIndex(index) {
-    rdActiveIndex = index;
-    if (!rdRowCells || rdRowCells.length === 0) return;
+  function rddcSetRowRepeats(rowIndex, value) {
+    const rows = rddcGetTableRows();
+    if (rowIndex < 0 || rowIndex >= rows.length) return;
+    const cell = rows[rowIndex].repeatsCell;
+    if (!cell) return;
+    cell.textContent = String(value);
+  }
 
-    rdRowCells.forEach((cells, i) => {
-      const active = (i === index);
-      cells.forEach(c => {
-        c.classList.remove('rd-active');
-        if (!c.classList.contains('rd-data')) c.classList.add('rd-data');
-        if (active) {
-          c.classList.add('rd-active');
-        }
-      });
+  function rddcResetAllRepeatsToOriginal() {
+    const rows = rddcGetTableRows();
+    if (!rows.length) return;
+    const items = rddcGetItemsFromInputs();
+    rows.forEach((_, i) => {
+      const text = items[i] ? String(items[i].repeatsRaw || '') : '';
+      rddcSetRowRepeats(i, text);
     });
   }
 
-  function rdScheduleFromNow() {
-    rdClearTimers();
-    rdResetHighlight();
+  function rddcScheduleCountdown() {
+    rddcClearTimers();
+    rddcSeq = rddcBuildSequence();
 
-    rdSequenceInfo = buildSequenceInfoFromDom();
-    const { durationsMs, loopCount, totalOneLoopMs } = rdSequenceInfo;
+    const { durationsMs, repeatSteps, loopCount, totalOneLoopMs, totalAllMs } = rddcSeq;
 
-    // If nothing meaningful to schedule, exit
     if (!durationsMs.length || totalOneLoopMs === 0 || loopCount <= 0) {
-      rdRunning = false;
+      rddcRunning = false;
       return;
     }
 
-    rdRunning = true;
-    rdStartMs = Date.now();
+    rddcRunning = true;
+    rddcStartMs = Date.now();
 
-    let offset = 0;
+    // For each loop and each row, schedule: reset to full, then decrement step by step
+    let loopOffset = 0;
     for (let loop = 0; loop < loopCount; loop++) {
-      let cum = 0;
+      let rowStartInLoop = 0;
       for (let i = 0; i < durationsMs.length; i++) {
-        const t = offset + cum;
-        // Schedule activation of row i at time t
-        rdTimers.push(setTimeout(() => {
-          // If overlay is open, apply immediately; if not, just update state
-          rdApplyActiveIndex(i);
-        }, t));
-        cum += durationsMs[i];
+        const tStart = loopOffset + rowStartInLoop;
+        const dur = durationsMs[i];
+        const steps = repeatSteps[i];
+        const stepMs = steps > 0 ? (dur / steps) : 0;
+
+        // At row start: set repeats to full steps (or 0 if steps==0)
+        rddcTimers.push(setTimeout(() => {
+          rddcSetRowRepeats(i, steps > 0 ? steps : 0);
+        }, tStart));
+
+        // Decrement steps
+        if (steps > 0 && stepMs > 0) {
+          for (let s = 1; s <= steps; s++) {
+            rddcTimers.push(setTimeout(() => {
+              rddcSetRowRepeats(i, Math.max(0, steps - s));
+            }, Math.round(tStart + s * stepMs)));
+          }
+        }
+
+        rowStartInLoop += dur;
       }
-      offset += totalOneLoopMs;
+      loopOffset += totalOneLoopMs;
     }
 
-    // When entire run ends, clear highlight
-    rdTimers.push(setTimeout(() => {
-      rdRunning = false;
-      rdResetHighlight();
-    }, rdSequenceInfo.totalAllMs));
+    // After all, mark not running and optionally reset
+    rddcTimers.push(setTimeout(() => {
+      rddcRunning = false;
+      // Keep at 0 where finished; do not auto-reset here.
+    }, rddcSeq.totalAllMs));
   }
 
-  function rdSyncToElapsed() {
-    if (!rdRunning || !rdSequenceInfo || rdStartMs == null) return;
+  function rddcUpdateCountsByElapsed() {
+    if (!rddcRunning || !rddcSeq) return;
+
+    const rows = rddcGetTableRows();
+    if (!rows.length) return;
 
     const now = Date.now();
-    const elapsed = now - rdStartMs;
+    const elapsed = now - (rddcStartMs || now);
+    const { durationsMs, repeatSteps, totalOneLoopMs, totalAllMs } = rddcSeq;
+
     if (elapsed < 0) return;
-
-    const { durationsMs, totalOneLoopMs, totalAllMs } = rdSequenceInfo;
-
     if (elapsed >= totalAllMs) {
-      rdApplyActiveIndex(-1);
+      // Finished: show zeros
+      repeatSteps.forEach((_, i) => rddcSetRowRepeats(i, 0));
       return;
     }
 
     const posInCycle = totalOneLoopMs > 0 ? (elapsed % totalOneLoopMs) : 0;
+
+    // Compute prefix sums to find row windows
+    const starts = [];
     let acc = 0;
-    let idx = -1;
     for (let i = 0; i < durationsMs.length; i++) {
-      if (posInCycle < acc + durationsMs[i]) {
-        idx = i;
-        break;
-      }
+      starts.push(acc);
       acc += durationsMs[i];
     }
-    rdApplyActiveIndex(idx);
-  }
 
-  function rdStopSchedule() {
-    rdClearTimers();
-    rdRunning = false;
-    rdStartMs = null;
-    rdSequenceInfo = null;
-    rdResetHighlight();
+    for (let i = 0; i < durationsMs.length; i++) {
+      const start = starts[i];
+      const end = start + durationsMs[i];
+      const steps = repeatSteps[i];
+
+      if (posInCycle < start) {
+        // Not started yet in this cycle: show full
+        rddcSetRowRepeats(i, steps);
+      } else if (posInCycle >= end) {
+        // Already finished in this cycle
+        rddcSetRowRepeats(i, 0);
+      } else {
+        // In progress
+        if (steps <= 0 || durationsMs[i] === 0) {
+          rddcSetRowRepeats(i, 0);
+        } else {
+          const stepMs = durationsMs[i] / steps;
+          const progressed = posInCycle - start;
+          const doneSteps = Math.floor(progressed / stepMs);
+          const left = Math.max(0, steps - doneSteps);
+          rddcSetRowRepeats(i, left);
+        }
+      }
+    }
   }
 
   function init() {
-    injectStyles();
-    createUI();
-
-    // Hook into Start/Stop to sync the display's highlight schedule
     const startBtn = document.getElementById('startBtn');
     const stopBtn = document.getElementById('stopBtn');
 
-    if (startBtn && !startBtn.__rdHooked) {
-      startBtn.__rdHooked = true;
+    if (startBtn && !startBtn.__rddcHooked) {
+      startBtn.__rddcHooked = true;
       startBtn.addEventListener('click', () => {
-        // Defer so original handler can set isPlaying first
+        // Start our countdown schedule just after main logic flips isPlaying
         setTimeout(() => {
           if (typeof isPlaying !== 'undefined' && isPlaying) {
-            rdScheduleFromNow();
+            rddcScheduleCountdown();
           }
         }, 0);
       });
     }
 
-    if (stopBtn && !stopBtn.__rdHooked) {
-      stopBtn.__rdHooked = true;
+    if (stopBtn && !stopBtn.__rddcHooked) {
+      stopBtn.__rddcHooked = true;
       stopBtn.addEventListener('click', () => {
-        rdStopSchedule();
+        rddcClearTimers();
+        rddcRunning = false;
+        rddcStartMs = null;
+        rddcSeq = null;
+        // Reset repeats to original inputs on complete stop
+        rddcResetAllRepeatsToOriginal();
       });
     }
 
-    // If language changes later, ensure "Display" translates
-    const langSelect = document.getElementById('langSelect');
-    if (langSelect && !langSelect.__rdHooked) {
-      langSelect.__rdHooked = true;
-      langSelect.addEventListener('change', () => {
-        try {
-          if (typeof applyTranslation === 'function') {
-            applyTranslation(langSelect.value);
+    // When opening Display, bring counts to current elapsed position
+    const displayBtn = document.getElementById('displayBtn');
+    if (displayBtn && !displayBtn.__rddcHooked) {
+      displayBtn.__rddcHooked = true;
+      displayBtn.addEventListener('click', () => {
+        // Run after the previous display render code
+        setTimeout(() => {
+          if (rddcRunning) {
+            rddcUpdateCountsByElapsed();
+          } else {
+            // Not running: ensure visible numbers match inputs
+            rddcResetAllRepeatsToOriginal();
           }
-        } catch (_) {}
+        }, 0);
       });
     }
   }
