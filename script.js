@@ -497,15 +497,29 @@ document.getElementById("calcAutoBtn").addEventListener("click", () => {
 
 
 
-// === Minimal Rhythm Display (Popup) ===
+// === Minimal Rhythm Display (Popup) + Playback-Synced Highlight + i18n-aware "Display" button ===
 (function () {
-  // Remove any previous display UI from older snippet if present
-  const oldOverlay = document.getElementById('settingsDisplayOverlay');
-  if (oldOverlay) oldOverlay.remove();
-  const oldStyles = document.getElementById('settingsDisplayStyles');
-  if (oldStyles) oldStyles.remove();
-  const oldBtn = document.getElementById('displayBtn');
-  if (oldBtn) oldBtn.remove();
+  // Clean any older display UIs from previous snippets
+  const oldOverlayA = document.getElementById('settingsDisplayOverlay');
+  if (oldOverlayA) oldOverlayA.remove();
+  const oldStylesA = document.getElementById('settingsDisplayStyles');
+  if (oldStylesA) oldStylesA.remove();
+  const oldBtnA = document.getElementById('displayBtn');
+  if (oldBtnA && !oldBtnA.__keepDisplayBtn) oldBtnA.remove();
+
+  // Add/restore translation entries for "Display" if translations exist
+  if (typeof translations === 'object' && translations.en && translations.fa) {
+    if (!translations.en["Display"]) translations.en["Display"] = "Display";
+    if (!translations.fa["Display"]) translations.fa["Display"] = "نمایش";
+  }
+
+  // State for highlight scheduling
+  let rdTimers = [];
+  let rdActiveIndex = -1;           // which row is active (0-based), -1 = none
+  let rdRowCells = [];              // array of [c1,c2,c3] per data row
+  let rdSequenceInfo = null;        // { items:[{pattern,bpm,repeats}], durationsMs:[], loopCount, totalOneLoopMs, totalAllMs }
+  let rdStartMs = null;             // Date.now() when schedule started
+  let rdRunning = false;
 
   function injectStyles() {
     if (document.getElementById('rhythmDisplayStyles')) return;
@@ -524,7 +538,7 @@ document.getElementById("calcAutoBtn").addEventListener("click", () => {
       #rhythmDisplayModal {
         background: #141414;
         color: #fff;
-        max-width: 680px;
+        max-width: 720px;
         width: 92vw;
         max-height: 85vh;
         overflow: auto;
@@ -533,6 +547,25 @@ document.getElementById("calcAutoBtn").addEventListener("click", () => {
         border-radius: 12px;
         padding: 16px;
       }
+      #rdControlBar {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+      #rdPlayBtn, #rdStopBtn {
+        border: 1px solid var(--x);
+        color: var(--x);
+        background: transparent;
+        border-radius: 8px;
+        width: 40px;
+        height: 32px;
+        cursor: pointer;
+        font-size: 16px;
+      }
+      #rdPlayBtn:hover, #rdStopBtn:hover { background: var(--x); color: #000; }
+
       #rhythmDisplayTable {
         display: grid;
         grid-template-columns: 1fr 1fr 1fr;
@@ -549,6 +582,14 @@ document.getElementById("calcAutoBtn").addEventListener("click", () => {
       .rd-cell {
         white-space: pre;
       }
+      .rd-data {
+        color: #8a8a8a;
+      }
+      .rd-active {
+        color: var(--x) !important;
+        font-weight: 700;
+      }
+
       #displayBtn {
         border: 1px solid var(--x);
         color: var(--x);
@@ -567,10 +608,33 @@ document.getElementById("calcAutoBtn").addEventListener("click", () => {
     if (!document.getElementById('rhythmDisplayOverlay')) {
       const overlay = document.createElement('div');
       overlay.id = 'rhythmDisplayOverlay';
+
       const modal = document.createElement('div');
       modal.id = 'rhythmDisplayModal';
+
+      // Top control bar (icons only)
+      const controls = document.createElement('div');
+      controls.id = 'rdControlBar';
+
+      const playBtn = document.createElement('button');
+      playBtn.id = 'rdPlayBtn';
+      playBtn.type = 'button';
+      playBtn.setAttribute('aria-label', 'Play');
+      playBtn.textContent = '▶';
+
+      const stopBtnTop = document.createElement('button');
+      stopBtnTop.id = 'rdStopBtn';
+      stopBtnTop.type = 'button';
+      stopBtnTop.setAttribute('aria-label', 'Stop');
+      stopBtnTop.textContent = '■';
+
+      controls.appendChild(playBtn);
+      controls.appendChild(stopBtnTop);
+
       const table = document.createElement('div');
       table.id = 'rhythmDisplayTable';
+
+      modal.appendChild(controls);
       modal.appendChild(table);
       overlay.appendChild(modal);
       document.body.appendChild(overlay);
@@ -581,6 +645,16 @@ document.getElementById("calcAutoBtn").addEventListener("click", () => {
       document.addEventListener('keydown', e => {
         if (e.key === 'Escape') overlay.style.display = 'none';
       });
+
+      // Hook overlay play/stop to main controls
+      playBtn.addEventListener('click', () => {
+        const startBtn = document.getElementById('startBtn');
+        if (startBtn) startBtn.click();
+      });
+      stopBtnTop.addEventListener('click', () => {
+        const stopBtn = document.getElementById('stopBtn');
+        if (stopBtn) stopBtn.click();
+      });
     }
 
     let button = document.getElementById('displayBtn');
@@ -589,6 +663,7 @@ document.getElementById("calcAutoBtn").addEventListener("click", () => {
       button.id = 'displayBtn';
       button.type = 'button';
       button.textContent = 'Display';
+      button.__keepDisplayBtn = true;
     } else {
       button.remove();
     }
@@ -606,8 +681,21 @@ document.getElementById("calcAutoBtn").addEventListener("click", () => {
 
     button.addEventListener('click', () => {
       renderRhythmDisplay();
+      // If already running, sync active row by elapsed time
+      if (rdRunning) {
+        rdSyncToElapsed();
+        rdApplyActiveIndex(rdActiveIndex);
+      }
       document.getElementById('rhythmDisplayOverlay').style.display = 'flex';
     });
+
+    // Apply translation to "Display" button if available
+    try {
+      const langSelect = document.getElementById('langSelect');
+      if (langSelect && typeof applyTranslation === 'function') {
+        applyTranslation(langSelect.value);
+      }
+    } catch (_) {}
   }
 
   function getRows() {
@@ -647,8 +735,9 @@ document.getElementById("calcAutoBtn").addEventListener("click", () => {
     const table = document.getElementById('rhythmDisplayTable');
     if (!table) return;
     table.innerHTML = '';
+    rdRowCells = [];
 
-    // Header (only these three words)
+    // Header (exactly these three words, centered)
     ['پترن', 'سرعت', 'میزان'].forEach(text => {
       const cell = document.createElement('div');
       cell.className = 'rd-cell rd-header';
@@ -656,27 +745,215 @@ document.getElementById("calcAutoBtn").addEventListener("click", () => {
       table.appendChild(cell);
     });
 
-    // Rows
+    // Data rows
     const rows = getRows();
     rows.forEach(([pat, bpm, rep]) => {
       const c1 = document.createElement('div');
-      c1.className = 'rd-cell';
+      c1.className = 'rd-cell rd-data';
       c1.textContent = pat || '';
       const c2 = document.createElement('div');
-      c2.className = 'rd-cell';
+      c2.className = 'rd-cell rd-data';
       c2.textContent = bpm || '';
       const c3 = document.createElement('div');
-      c3.className = 'rd-cell';
+      c3.className = 'rd-cell rd-data';
       c3.textContent = rep || '';
       table.appendChild(c1);
       table.appendChild(c2);
       table.appendChild(c3);
+      rdRowCells.push([c1, c2, c3]);
     });
+
+    // Apply current highlight state, if any
+    rdApplyActiveIndex(rdActiveIndex);
+  }
+
+  function sumPattern(arr) {
+    if (!Array.isArray(arr)) return 0;
+    return arr.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0);
+  }
+
+  function buildSequenceInfoFromDom() {
+    const items = [];
+
+    // Main
+    const mainPatternInput = document.getElementById('mainPattern');
+    const mainRepeatsInput = document.getElementById('mainRepeats');
+    const mainBpmInput = document.getElementById('mainBPM');
+
+    const mainPatternArr = typeof parsePattern === 'function' ? parsePattern(mainPatternInput ? mainPatternInput.value : '') : [];
+    const mainRepeats = parseInt(mainRepeatsInput ? mainRepeatsInput.value : '0', 10) || 0;
+    const mainBpm = parseFloat(mainBpmInput ? mainBpmInput.value : '0') || 0;
+    items.push({ pattern: mainPatternArr, repeats: mainRepeats, bpm: mainBpm });
+
+    // Polys
+    const polyBoxes = document.querySelectorAll('.polyBox');
+    polyBoxes.forEach(box => {
+      const arr = typeof parsePattern === 'function' ? parsePattern((box.querySelector('.polyPattern') || {}).value || '') : [];
+      const repeats = parseInt((box.querySelector('.polyRepeats') || {}).value || '0', 10) || 0;
+      const bpm = parseFloat((box.querySelector('.polyBPM') || {}).value || '0') || 0;
+      items.push({ pattern: arr, repeats, bpm });
+    });
+
+    const durationsMs = items.map(it => {
+      const ticksPerRepeat = sumPattern(it.pattern);
+      const beatLen = it.bpm > 0 ? (60 / it.bpm) : 0;
+      const totalTicks = ticksPerRepeat * (it.repeats > 0 ? it.repeats : 0);
+      const ms = totalTicks * beatLen * 1000;
+      return Math.max(0, Math.round(ms));
+    });
+
+    const loopCount = parseInt((document.getElementById('loopCount') || {}).value || '1', 10) || 1;
+    const totalOneLoopMs = durationsMs.reduce((a, b) => a + b, 0);
+    const totalAllMs = totalOneLoopMs * loopCount;
+
+    return { items, durationsMs, loopCount, totalOneLoopMs, totalAllMs };
+  }
+
+  function rdClearTimers() {
+    rdTimers.forEach(t => clearTimeout(t));
+    rdTimers = [];
+  }
+
+  function rdResetHighlight() {
+    rdActiveIndex = -1;
+    if (rdRowCells && rdRowCells.length) {
+      rdRowCells.forEach(cells => {
+        cells.forEach(c => {
+          c.classList.remove('rd-active');
+          if (!c.classList.contains('rd-data')) c.classList.add('rd-data');
+        });
+      });
+    }
+  }
+
+  function rdApplyActiveIndex(index) {
+    rdActiveIndex = index;
+    if (!rdRowCells || rdRowCells.length === 0) return;
+
+    rdRowCells.forEach((cells, i) => {
+      const active = (i === index);
+      cells.forEach(c => {
+        c.classList.remove('rd-active');
+        if (!c.classList.contains('rd-data')) c.classList.add('rd-data');
+        if (active) {
+          c.classList.add('rd-active');
+        }
+      });
+    });
+  }
+
+  function rdScheduleFromNow() {
+    rdClearTimers();
+    rdResetHighlight();
+
+    rdSequenceInfo = buildSequenceInfoFromDom();
+    const { durationsMs, loopCount, totalOneLoopMs } = rdSequenceInfo;
+
+    // If nothing meaningful to schedule, exit
+    if (!durationsMs.length || totalOneLoopMs === 0 || loopCount <= 0) {
+      rdRunning = false;
+      return;
+    }
+
+    rdRunning = true;
+    rdStartMs = Date.now();
+
+    let offset = 0;
+    for (let loop = 0; loop < loopCount; loop++) {
+      let cum = 0;
+      for (let i = 0; i < durationsMs.length; i++) {
+        const t = offset + cum;
+        // Schedule activation of row i at time t
+        rdTimers.push(setTimeout(() => {
+          // If overlay is open, apply immediately; if not, just update state
+          rdApplyActiveIndex(i);
+        }, t));
+        cum += durationsMs[i];
+      }
+      offset += totalOneLoopMs;
+    }
+
+    // When entire run ends, clear highlight
+    rdTimers.push(setTimeout(() => {
+      rdRunning = false;
+      rdResetHighlight();
+    }, rdSequenceInfo.totalAllMs));
+  }
+
+  function rdSyncToElapsed() {
+    if (!rdRunning || !rdSequenceInfo || rdStartMs == null) return;
+
+    const now = Date.now();
+    const elapsed = now - rdStartMs;
+    if (elapsed < 0) return;
+
+    const { durationsMs, totalOneLoopMs, totalAllMs } = rdSequenceInfo;
+
+    if (elapsed >= totalAllMs) {
+      rdApplyActiveIndex(-1);
+      return;
+    }
+
+    const posInCycle = totalOneLoopMs > 0 ? (elapsed % totalOneLoopMs) : 0;
+    let acc = 0;
+    let idx = -1;
+    for (let i = 0; i < durationsMs.length; i++) {
+      if (posInCycle < acc + durationsMs[i]) {
+        idx = i;
+        break;
+      }
+      acc += durationsMs[i];
+    }
+    rdApplyActiveIndex(idx);
+  }
+
+  function rdStopSchedule() {
+    rdClearTimers();
+    rdRunning = false;
+    rdStartMs = null;
+    rdSequenceInfo = null;
+    rdResetHighlight();
   }
 
   function init() {
     injectStyles();
     createUI();
+
+    // Hook into Start/Stop to sync the display's highlight schedule
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+
+    if (startBtn && !startBtn.__rdHooked) {
+      startBtn.__rdHooked = true;
+      startBtn.addEventListener('click', () => {
+        // Defer so original handler can set isPlaying first
+        setTimeout(() => {
+          if (typeof isPlaying !== 'undefined' && isPlaying) {
+            rdScheduleFromNow();
+          }
+        }, 0);
+      });
+    }
+
+    if (stopBtn && !stopBtn.__rdHooked) {
+      stopBtn.__rdHooked = true;
+      stopBtn.addEventListener('click', () => {
+        rdStopSchedule();
+      });
+    }
+
+    // If language changes later, ensure "Display" translates
+    const langSelect = document.getElementById('langSelect');
+    if (langSelect && !langSelect.__rdHooked) {
+      langSelect.__rdHooked = true;
+      langSelect.addEventListener('change', () => {
+        try {
+          if (typeof applyTranslation === 'function') {
+            applyTranslation(langSelect.value);
+          }
+        } catch (_) {}
+      });
+    }
   }
 
   if (document.readyState === 'loading') {
