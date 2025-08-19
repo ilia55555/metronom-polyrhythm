@@ -97,6 +97,67 @@
 </div>
   </div> <!-- ✅ پایان کامل بخش کنترل‌ها -->
 
+
+
+
+
+<!-- Box 4: Polyrhythm Calculator -->
+<div class="container">
+  <h1 id="headerTitle">Polyrhythm Time Calculator</h1>
+
+ <div class="input-group">
+  <label id="firstRhythmLabel">First Rhythm:</label>
+  <span dir="ltr" style="display: inline-flex; align-items: center;">
+    <input type="number" id="num1" placeholder="Beats (e.g., 5)"> / 
+    <input type="number" id="den1" placeholder="Unit (e.g., 4)">
+  </span>
+</div>
+
+<div class="input-group">
+  <label id="secondRhythmLabel">Second Rhythm:</label>
+  <span dir="ltr" style="display: inline-flex; align-items: center;">
+    <input type="number" id="num2" placeholder="Beats (e.g., 3)"> / 
+    <input type="number" id="den2" placeholder="Unit (e.g., 8)">
+  </span>
+</div>
+
+
+  <div class="input-group">
+    <label id="labelBpm1">BPM 1:</label>
+    <input type="number" id="bpm1" placeholder="e.g., 80">
+  </div>
+
+  <div class="input-group">
+    <label id="labelMeasures1">Measures of Rhythm 1:</label>
+    <input type="number" id="measures1" placeholder="e.g., 10">
+  </div>
+
+  <div class="input-group">
+    <label id="labelMeasures2">Measures of Rhythm 2 (optional):</label>
+    <input type="number" id="measures2" placeholder="leave blank to calculate">
+  </div>
+
+  <div class="input-group">
+    <label id="labelBpm2">BPM 2 (optional):</label>
+    <input type="number" id="bpm2" placeholder="leave blank to calculate">
+  </div>
+
+  <div class="input-group">
+    <button id="calcRunBtn">Calculate</button>
+    <button id="calcAutoBtn">Auto</button>
+  </div>
+
+  
+  <!-- جای نمایش نتیجه -->
+  <div class="input-group">
+    <label id="resultLabel" style="color: white;">Result:</label>
+    <div id="calcResult" style="color: white; font-weight: bold; min-height: 1.2em;"></div>
+  </div>
+</div>
+
+
+
+
   <script src="script.js"></script>
 </body>
 </html>
