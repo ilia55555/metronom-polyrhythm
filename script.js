@@ -384,3 +384,91 @@ function shadeColor(color, percent) {
     (B < 255 ? (B < 0 ? 0 : B) : 255)
   ).toString(16).slice(1);
 }
+
+
+
+
+//ماشین حساب
+function calculate() {
+  const num1 = parseFloat(document.getElementById("num1").value);
+  const den1 = parseFloat(document.getElementById("den1").value);
+  const num2 = parseFloat(document.getElementById("num2").value);
+  const den2 = parseFloat(document.getElementById("den2").value);
+  const bpm1 = parseFloat(document.getElementById("bpm1").value);
+  const m1 = parseFloat(document.getElementById("measures1").value);
+  const m2 = parseFloat(document.getElementById("measures2").value);
+  const bpm2_input = parseFloat(document.getElementById("bpm2").value);
+
+  if (isNaN(num1) || isNaN(den1) || isNaN(num2) || isNaN(den2) || isNaN(bpm1) || isNaN(m1)) {
+    document.getElementById("calcResult").innerText = "Please fill in all required fields";
+    return null;
+  }
+
+  const beats1 = num1 * m1;
+  const time1 = (beats1 * 60) / bpm1; // ثانیه
+
+  let bpm2, measures2;
+  let resultText = "";
+
+  if (!isNaN(m2)) {
+    const beats2 = num2 * m2;
+    bpm2 = (beats2 * 60) / time1;
+    measures2 = m2;
+    resultText = `BPM2: ${bpm2.toFixed(2)}`;
+  } else if (!isNaN(bpm2_input)) {
+    bpm2 = bpm2_input;
+    const beatLength2 = 60 / bpm2_input;
+    const totalBeats2 = time1 / beatLength2;
+    measures2 = totalBeats2 / num2;
+    resultText = `Measures 2: ${measures2.toFixed(2)}`;
+  } else {
+    resultText = "Please enter either the second rate or the second speed";
+    document.getElementById("calcResult").innerText = resultText;
+    return null;
+  }
+
+  // نمایش نتیجه
+  document.getElementById("calcResult").innerText = resultText;
+
+  // بازگشت داده‌ها برای استفاده در دکمه اتو
+  return { bpm1, m1, num1, bpm2, measures2, num2 };
+}
+
+// رویداد دکمه Calculate
+document.getElementById("calcRunBtn").addEventListener("click", () => {
+  calculate();
+});
+
+// رویداد دکمه Auto
+document.getElementById("calcAutoBtn").addEventListener("click", () => {
+  const calcValues = calculate();
+  if (!calcValues) return;
+
+  const { bpm1, m1, num1, bpm2, measures2, num2 } = calcValues;
+
+  const mainBpmSlider = document.getElementById("mainBPM");
+  if (mainBpmSlider) {
+    mainBpmSlider.value = bpm1;
+    mainBpmSlider.dispatchEvent(new Event('input'));
+  }
+
+  if (document.getElementById("mainRepeats")) {
+    document.getElementById("mainRepeats").value = m1;
+  }
+
+  if (document.getElementById("mainPattern")) {
+    document.getElementById("mainPattern").value = num1.toString();
+  }
+
+  const firstPoly = document.querySelector(".polyBox");
+  if (firstPoly) {
+    const polyBpm = firstPoly.querySelector(".polyBPM");
+    const polyRepeats = firstPoly.querySelector(".polyRepeats");
+    const polyPattern = firstPoly.querySelector(".polyPattern");
+
+    if (polyBpm) polyBpm.value = bpm2;
+    if (polyRepeats) polyRepeats.value = measures2.toFixed(2);
+    if (polyPattern) polyPattern.value = num2.toString();
+  }
+});
+

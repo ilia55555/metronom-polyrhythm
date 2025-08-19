@@ -1,0 +1,501 @@
+:root {
+  --x: #ffcc00;
+  --x-hover: #e6b800;
+  --x-border: #b38f00;
+}
+
+body {
+  background-color: #121212;
+  color: #eee;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  margin: 0;
+  padding: 20px;
+}
+
+h2 {
+  margin-bottom: 30px;
+  color: var(--x);
+}
+
+.container {
+  max-width: 700px;
+  margin: auto;
+  background-color: #1e1e1e;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 0 100px var(--x);
+}
+
+label {
+  display: inline-block;
+  margin-right: 10px;
+  font-weight: 600;
+}
+
+input[type="text"],
+input[type="number"],
+select {
+  background-color: #2c2c2c;
+  border: 1px solid #444;
+  border-radius: 5px;
+  color: #eee;
+  padding: 5px 10px;
+  margin-right: 15px;
+  width: 90px;
+}
+
+input[type="number"] {
+  width: 60px;
+}
+
+button {
+  background-color: var(--x);
+  border: none;
+  padding: 8px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 5px 10px 10px 0;
+  transition: background-color 0.3s ease;
+}
+
+button:hover {
+  background-color: var(--x-hover);
+}
+
+
+
+
+button:focus,
+button:active {
+  background-color: var(--x-hover);
+  outline: none;
+}
+
+
+#mainControls {
+  margin-bottom: 25px;
+  border-bottom: 1px solid #333;
+  padding-bottom: 15px;
+}
+
+.polyBox {
+  background-color: #272727;
+  margin-bottom: 15px;
+  padding: 15px;
+  border-radius: 6px;
+  box-shadow: inset 0 0 8px #444;
+}
+
+.polyBox label {
+  margin-top: 8px;
+}
+
+.removePoly {
+  background-color: #cc3300;
+  color: #fff;
+  font-weight: 700;
+  margin-left: 10px;
+}
+
+.removePoly:hover {
+  background-color: #b32400;
+}
+
+#addPolyrhythm {
+  background-color: #009900;
+  color: white;
+  margin-top: 10px;
+  font-weight: 700;
+}
+
+#addPolyrhythm:hover {
+  background-color: #007700;
+}
+
+/* نوارکنترل سرعت */
+body[dir="rtl"] .bpm-control {
+  direction: ltr !important;
+}
+
+.bpm-control {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  margin: 15px 0;
+  direction: ltr;
+}
+
+.bpm-control button {
+  background: var(--x);
+  border: none;
+  color: #1e1e1e;
+  font-size: 1.2rem;
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-weight: bold;
+  padding: 0;
+  line-height: 1;
+  transition: background 0.2s ease;
+}
+
+.bpm-control button:hover {
+  background: #cccccc;
+}
+
+#mainBPM {
+  width: 260px;
+  height: 6px;
+  background: #444;
+  border-radius: 5px;
+  outline: none;
+  appearance: none;
+  margin: 0px;
+}
+
+
+
+#mainBPM::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  background: var(--x);
+  border: 2px solid var(--x-border);  /* ✅ این خط */
+  border-radius: 50%;
+  cursor: pointer;
+  margin-top: -1px;
+}
+
+#mainBPM::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  background: var(--x);
+  border: 2px solid var(--x-border);  /* ✅ این خط */
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+
+#bpmDisplay {
+  min-width: 70px;
+  text-align: center;
+  font-weight: 700;
+  color: var(--x);
+  font-size: 1rem;
+  margin-left: 8px;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  width: 120px;
+  height: 6px;
+  background: #444;
+  border-radius: 5px;
+  outline: none;
+  margin-left: 10px;
+}
+
+/* توپک نوار */
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 21px;
+  height: 21px;
+  background: var(--x);
+  
+  cursor: pointer;
+  border-radius: 50%;
+  border: 1px solid var(--x-border);
+  margin-top: -1px;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  background: var(--x);
+  cursor: pointer;
+  border-radius: 50%;
+  border: 1px solid var(--x-border);
+}
+
+#loopControls {
+  margin-top: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#loopControls label {
+  font-weight: 700;
+  color: #ddd;
+}
+
+#loopCount, #mainRepeats {
+  width: 50px;
+  background-color: #2c2c2c;
+  border: 1px solid #444;
+  border-radius: 4px;
+  color: #eee;
+  padding: 3px 8px;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* 🔹 علامت سوال ساده */
+.container {
+  position: relative;
+  margin-bottom: 40px;
+}
+
+#helpIcon {
+  position: absolute;
+  top: 10px;
+  inset-inline-end: 10px; /* راست در LTR، چپ در RTL */
+  font-size: 16px;
+  color: var(--x);
+  cursor: help;
+  z-index: 10;
+}
+
+#helpTooltip {
+  display: none;
+  position: absolute;
+  top: 35px;
+  inset-inline-end: 10px; /* مثل آیکن، خودکار RTL/LTR */
+  background: #333;
+  color: #fff;
+  padding: 10px;
+  border-radius: 5px;
+  font-size: 13px;
+  max-width: 250px;
+  box-shadow: 0 0 10px #000;
+  z-index: 100;
+}
+
+#helpIcon:hover + #helpTooltip {
+  display: block;
+}
+
+#bpmDecrease {
+  margin-right: 0px;
+}
+
+#bpmIncrease {
+  margin-left: 0px;
+}
+
+#startBtn:hover,
+#stopBtn:hover {
+  background-color: var(--x-hover);
+}
+
+#startBtn:active,
+#stopBtn:active {
+  background-color: var(--x-hover);
+}
+
+.divider {
+  height: 1px;
+  background-color: opacity;
+  opacity: 0.2;
+}
+
+
+
+
+
+/* 🔹 ردیف تم و زبان */
+.theme-lang-row {
+  display: flex;
+  justify-content: flex-start; /* به سمت چپ در دسکتاپ */
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+  margin-bottom: 10px;
+  padding-left: 10px;
+}
+
+/* 🔸 استایل لیبل‌ها */
+.theme-lang-row label {
+  font-weight: bold;
+  color: #fff;
+  font-size: 14px;
+}
+
+/* 🔸 استایل select‌ها */
+.theme-lang-row select {
+  background-color: #222;
+  color: #fff;
+  border: 1px solid #555;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.theme-lang-row select:hover {
+  border-color: #888;
+}
+
+
+@media (max-width: 600px) {
+  .container {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px;
+    overflow-x: hidden;
+  }
+
+  .theme-lang-row {
+    display: flex;
+    flex-wrap: wrap; /* ← مهم: اجازه بده آیتم‌ها برن زیر هم */
+    width: 100%;
+    box-sizing: border-box;
+    gap: 4px; /* فاصله کم ولی مؤثر بین المان‌ها */
+    align-items: center;
+    justify-content: flex-start;
+  }
+
+  .theme-lang-row > label,
+  .theme-lang-row > select {
+    flex: 1 1 45%; /* ← اجازه بده هر کدوم تا 45٪ از عرض بگیرن */
+    min-width: 120px; /* حداقل عرض باکس‌ها */
+    max-width: 48%; /* نذار بیشتر از نصف صفحه بشن */
+  }
+
+  .theme-lang-row > label[for="langSelect"] {
+    order: 1;
+  }
+
+  .theme-lang-row > select#langSelect {
+    order: 2;
+  }
+
+  .theme-lang-row > label[for="themeSelect"] {
+    order: 3;
+  }
+
+  .theme-lang-row > select#themeSelect {
+    order: 4;
+  }
+}
+
+
+#themeLabel {
+  display: none !important;
+}
+
+
+
+.container h1 {
+  font-size: 1.8rem; /* یا عدد دلخواه کوچکتر */
+  margin-bottom: 20px; /* اگر خواستی فاصله زیرش کمتر بشه */
+  color: var(--x); /* اگر میخوای رنگش رو از تم بگیری */
+}
+
+
+
+/* تنظیمات کلی برای گروه‌های ورودی */
+.input-group {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin-bottom: 15px;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+/* ستون لیبل‌ها */
+.input-group label {
+  flex: 0 0 170px; /* عرض ثابت برای لیبل */
+  font-weight: 600;
+  min-width: 25px;
+  color: #ffffff;
+}
+
+/* ستون ورودی‌ها */
+.input-group input[type="number"],
+.input-group input[type="text"] {
+  background-color: #2c2c2c;
+  border: 1px solid #444;
+  border-radius: 6px;
+  color: #eee;
+  padding: 7px 10px;
+  margin-right: 10px;
+  font-size: 1rem;
+  width: 120px;
+  transition: border-color 0.3s ease;
+}
+
+.input-group input[type="number"]:focus,
+.input-group input[type="text"]:focus {
+  border-color: #ffffff;
+  outline: none;
+}
+
+/* برای ورودی‌های کوچک (مثل num1 و den1) عرض کمتر */
+.input-group input.small-input {
+  width: 60px;
+  margin-right: 5px;
+}
+
+/* استایل دکمه‌ها */
+.input-group button {
+  background-color: var(--x);
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-right: 10px;
+  transition: background-color 0.3s ease;
+  font-size: 1rem;
+}
+
+.input-group button:hover {
+  background-color: var(--x-hover);
+}
+
+/* باکس نتیجه */
+#calcResult {
+  background-color: #272727;
+  border: 1px solid var(--x-border);
+  padding: 10px 60px;
+  border-radius: 6px;
+  font-size: 1.1rem;
+  min-height: 4em;
+  color: var(--x);
+  transition: max-height 0.3s ease;
+  margin-top: 5px;
+  font-weight: 700;
+  user-select: text;
+}
+
+/* ریسپانسیو برای موبایل */
+@media (max-width: 600px) {
+  .input-group {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+  .input-group label {
+    flex: none;
+    margin-bottom: 6px;
+  }
+  .input-group input[type="number"],
+  .input-group input[type="text"] {
+    width: 100%;
+    margin-right: 0;
+  }
+  .input-group button {
+    width: 100%;
+    margin: 8px 0 0 0;
+  }
+}
+
