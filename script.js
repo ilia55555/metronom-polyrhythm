@@ -1,360 +1,367 @@
-// بخش صوت و وضعیت پخش
 let audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 let isPlaying = false;
 let stopRequested = false;
 
-
-
-// شخصی سازی صدا
+// فرکانس‌های مختلف برای نوع صداها
 const soundPresets = {
-  sine1: [523.25, 1046.50],
-  sine2: [659.25, 1318.51],
-  sine3: [784, 1568],
+  sine1: [440, 880],
+  sine2: [750, 1200],
+  sine3: [1000, 1800],
 };
 
-
-
-// بخش پخش کلیک (envelope برای جلوگیری از پاپ) — REPLACEMENT
-function playClick(frequency, gain = 1, length = 0.06) {
-  try {
-    const osc = audioCtx.createOscillator();
-    const g = audioCtx.createGain();
-
-    const now = audioCtx.currentTime;
-
-    osc.type = "triangle";
-    osc.frequency.value = frequency;
-
-    // very small initial value to avoid clicks, use exponential ramps
-    g.gain.setValueAtTime(0.0001, now);
-    // target the requested per-click gain (this gain will be multiplied by master boost chain)
-    const target = Math.max(0.001, gain);
-    // quick ramp up
-    g.gain.exponentialRampToValueAtTime(target, now + 0.001);
-    // ramp down to avoid pop
-    g.gain.exponentialRampToValueAtTime(0.0001, now + length);
-
-    osc.connect(g);
-
-    // connect into master boost chain if present, otherwise fallback to destination
-    try {
-      if (window.__masterBoost && window.__masterBoost.userBoostGain) {
-        g.connect(window.__masterBoost.userBoostGain);
-      } else {
-        g.connect(audioCtx.destination);
-      }
-    } catch (e) {
-      g.connect(audioCtx.destination);
-    }
-
-    osc.start(now);
-    osc.stop(now + length + 0.02);
-  } catch (err) {
-    console.error('playClick error:', err);
-  }
+function playClick(frequency, gain = 1) {
+  const osc = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  osc.type = "sine";
+  osc.frequency.value = frequency;
+  g.gain.value = gain;
+  osc.connect(g).connect(audioCtx.destination);
+  osc.start();
+  osc.stop(audioCtx.currentTime + 0.1);
 }
 
-
-
-
-
-// بخش تحلیل الگو
 function parsePattern(pattern) {
-  return pattern.split("+").map(n => parseInt(n.trim(), 10)).filter(n => !isNaN(n));
+  return pattern.split("+").map(n => parseInt(n.trim())).filter(n => !isNaN(n));
 }
 
-
-
-
-// بخش تبدیل BPM به تاخیر
 function getBpmDelay(bpm) {
-  const b = parseFloat(bpm);
-  if (!isFinite(b) || b <= 0) return 0.5;
-  return 60 / b;
+  return 60 / bpm;
 }
 
-
-
-
-
-// بخش نمایش BPM یکپارچه
+// 🔧 تابع اصلاح‌شده: تغییر رنگ نوار اسلایدر با توجه به مقدار
 function updateBpmDisplay() {
   const bpmSlider = document.getElementById("mainBPM");
-  if (!bpmSlider) return;
-  const bpm = parseFloat(bpmSlider.value);
-  const min = parseFloat(bpmSlider.min || 10);
-  const max = parseFloat(bpmSlider.max || 600);
+  const bpm = parseInt(bpmSlider.value);
+  const min = parseInt(bpmSlider.min);
+  const max = parseInt(bpmSlider.max);
   const percent = ((bpm - min) / (max - min)) * 100;
 
-  const baseSel = document.getElementById('baseNoteSelect');
-  const baseVal = baseSel ? baseSel.value : "1";
-  const quarter = toQuarterBpm(bpm, baseVal);
-  const baseLabel = baseSel ? (baseSel.options[baseSel.selectedIndex]?.text || '') : '';
-
-  document.getElementById("bpmDisplay").textContent = `${bpm}`;
+  document.getElementById("bpmDisplay").textContent = `${bpm} BPM`;
   bpmSlider.style.background = `linear-gradient(to right, var(--x) 0%, var(--x) ${percent}%, #444 ${percent}%, #444 100%)`;
 }
 
 
 
-
-
-// بخش اجرای الگو (ریتم اصلی یا پلی‌ریتم)
-// اضافه: پارامتر آخر progressCb برای گزارش وضعیت (غیرمسدود)
-async function playPattern(pattern, bpm, repeats, preset, volume = 1, onlyFirst = false, progressCb = null) {
+//اجرای الگوی ریتم خاص
+async function playPattern(pattern, bpm, repeats, preset, volume = 1) {
   const [lowFreq, highFreq] = soundPresets[preset] || soundPresets.sine1;
-
   const delay = getBpmDelay(bpm);
-  let clickLength = Math.min(0.08, Math.max(0.006, delay * 0.6));
-  if (clickLength > delay * 0.9) clickLength = Math.max(0.006, delay * 0.45);
+  const onlyFirst = document.getElementById("onlyFirstTick").checked;
 
-  try {
-    for (let r = 0; r < repeats; r++) {
-      // گزارش شروع هر تکرار (میزان)
-      if (progressCb && typeof progressCb === 'function') {
-        try {
-          progressCb({ type: 'repeatStart', repeatIndex: r, repeatNumber: r + 1, repeats });
-        } catch (e) { /* ignore */ }
-      }
+  for (let r = 0; r < repeats; r++) {
+    for (let group of pattern) {
+      if (stopRequested) return;
 
-      for (let groupIndex = 0; groupIndex < pattern.length; groupIndex++) {
-        const group = pattern[groupIndex];
-        if (stopRequested) return;
-
-        for (let i = 0; i < group; i++) {
-          if (stopRequested) return;
-
-          if (onlyFirst && i > 0) {
-            // گزارش هر بیت (در صورت نیاز) — غیرمسدود
-            if (progressCb && typeof progressCb === 'function') {
-              try {
-                progressCb({
-                  type: 'tick',
-                  repeatIndex: r,
-                  repeatNumber: r + 1,
-                  groupIndex,
-                  beatIndex: i,
-                  groupSize: group
-                });
-              } catch (e) {}
-            }
-            await new Promise(res => setTimeout(res, delay * 1000));
-            continue;
-          }
-
-          // گزارش قبل از پخش کلیک (غیرمسدود)
-          if (progressCb && typeof progressCb === 'function') {
-            try {
-              progressCb({
-                type: 'tick',
-                repeatIndex: r,
-                repeatNumber: r + 1,
-                groupIndex,
-                beatIndex: i,
-                groupSize: group
-              });
-            } catch (e) {}
-          }
-
-          const freq = (i === 0) ? lowFreq : highFreq;
-          playClick(freq, volume, clickLength);
-
+      for (let i = 0; i < group; i++) {
+        if (onlyFirst && i > 0) {
+          // فقط ضرب اول رو اجرا کن و بقیه رو skip کن
           await new Promise(res => setTimeout(res, delay * 1000));
+          continue;
         }
+
+        let freq = i === 0 ? lowFreq : highFreq;
+        playClick(freq, volume);
+        await new Promise(res => setTimeout(res, delay * 1000));
       }
     }
-  } catch (err) {
-    console.error('playPattern error:', err);
   }
 }
 
 
-
-
-
-
-// بخش گزینه‌های نت پایه و ایجاد select مربوطه
-const baseNoteOptions = [
-  { value: "whole", key: "whole", label: "whole" },
-  { value: "dottedWhole", key: "dottedWhole", label: "dottedWhole" },
-  { value: "half", key: "half", label: "half" },
-  { value: "dottedHalf", key: "dottedHalf", label: "dottedHalf" },
-  { value: "quarter", key: "quarter", label: "quarter" },
-  { value: "dottedQuarter", key: "dottedQuarter", label: "dottedQuarter" },
-  { value: "eighth", key: "eighth", label: "eighth" },
-  { value: "dottedEighth", key: "dottedEighth", label: "dottedEighth" },
-  { value: "sixteenth", key: "sixteenth", label: "sixteenth" },
-  { value: "dottedSixteenth", key: "dottedSixteenth", label: "dottedSixteenth" },
-  { value: "thirtySecond", key: "thirtySecond", label: "thirtySecond" },
-  { value: "dottedThirtySecond", key: "dottedThirtySecond", label: "dottedThirtySecond" },
-  { value: "sixtyFourth", key: "sixtyFourth", label: "sixtyFourth" },
-  { value: "dottedSixtyFourth", key: "dottedSixtyFourth", label: "dottedSixtyFourth" }
-];
-
-
-function createPolyBaseNoteSelect() {
-  const sel = document.createElement('select');
-  sel.className = 'polyBaseNote';
-  const currentLang = (document.getElementById('langSelect') && document.getElementById('langSelect').value) || 'en';
-  baseNoteOptions.forEach(opt => {
-    const o = document.createElement('option');
-    o.value = opt.value;
-    o.setAttribute('data-i18n', opt.key);
-    const txt = (translations && translations[currentLang] && translations[currentLang][opt.key]) || opt.label;
-    o.textContent = txt;
-    if (opt.key === 'quarter') o.selected = true;
-    sel.appendChild(o);
-  });
-  return sel;
-}
-
-
-
-
-
-
-// بخش تایمر کوچک با رزولوشن بالا (SmallTimer)
-// تغییر: تلاش برای قرارگیری امن کنار تیک ریتم اصلی (mainOnlyFirstTick) به‌جای تیک سراسری قبلی
-(function registerSmallTimerSafe() {
-  if (window.SmallTimer && document.getElementById('smallTimer')) return;
-
-  let smallTimerEl = document.getElementById('smallTimer');
-  try {
-    if (!smallTimerEl) {
-      smallTimerEl = document.createElement('div');
-      smallTimerEl.id = 'smallTimer';
-      smallTimerEl.style.cssText = 'font-size:0.75rem; color:var(--small-timer-color,#dcdcdc); margin-top:6px; text-align:right; min-width:72px; line-height:1;';
-      smallTimerEl.setAttribute('aria-hidden', 'true');
-      smallTimerEl.textContent = '00:00.00';
-
-      // تلاش برای پیدا کردن تیکِ ریتم اصلی (mainOnlyFirstTick) یا fallback
-      const mainOnlyElem = document.getElementById('mainOnlyFirstTick') || document.getElementById('onlyFirstTick');
-      if (mainOnlyElem) {
-        const parentLabel = mainOnlyElem.closest('label');
-        if (parentLabel && parentLabel.parentNode) parentLabel.parentNode.insertBefore(smallTimerEl, parentLabel.nextSibling);
-        else if (mainOnlyElem.parentNode) mainOnlyElem.parentNode.insertBefore(smallTimerEl, mainOnlyElem.nextSibling);
-        else (document.getElementById('mainContainer') || document.body).appendChild(smallTimerEl);
-      } else {
-        (document.getElementById('mainContainer') || document.body).appendChild(smallTimerEl);
-      }
-    }
-  } catch (e) {
-    try { document.body.appendChild(smallTimerEl); } catch (e2) {}
-  }
-
-  function formatMsToMMSSCS(ms) {
-    const totalCentis = Math.floor(ms / 10);
-    const cs = totalCentis % 100;
-    const totalSecs = Math.floor(ms / 1000);
-    const secs = totalSecs % 60;
-    const mins = Math.floor(totalSecs / 60);
-    return `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}.${String(cs).padStart(2,'0')}`;
-  }
-
-  let _raf = null;
-  let _start = 0;
-  let _running = false;
-
-  function _tick() {
-    if (!_running) return;
-    const elapsed = performance.now() - _start;
-    try { smallTimerEl.textContent = formatMsToMMSSCS(elapsed); } catch (e) {}
-    _raf = requestAnimationFrame(_tick);
-  }
-
-  const API = {
-    start() {
-      if (_running) return;
-      _start = performance.now();
-      _running = true;
-      try { smallTimerEl.textContent = '00:00.00'; smallTimerEl.style.display = ''; smallTimerEl.classList.remove('paused'); } catch (e) {}
-      _raf = requestAnimationFrame(_tick);
-    },
-    stop() {
-      if (!_running) return;
-      _running = false;
-      if (_raf) { cancelAnimationFrame(_raf); _raf = null; }
-      try { smallTimerEl.classList.add('paused'); } catch (e) {}
-    },
-    reset() {
-      _start = performance.now();
-      try { smallTimerEl.textContent = '00:00.00'; } catch (e) {}
-    },
-    isRunning() { return !!_running; }
-  };
-
-  window.SmallTimer = API;
-  window.__poly_smallTimerEl = smallTimerEl;
-})();
-
-
-
-
-
-// بخش افزودن پلی‌ریتم جدید
-document.getElementById("addPolyrhythm").addEventListener("click", (e) => {
-  e.preventDefault();
-
+// اضافه‌کردن پلی‌ریتم جدید
+document.getElementById("addPolyrhythm").addEventListener("click", () => {
   const container = document.createElement("div");
   container.className = "polyBox";
-
- // بخش درج تیک محلی فقط ضرب اول در polyBox (قابل ترجمه)
-container.innerHTML = `
-  <label>Pattern:</label>
-  <input type="text" class="polyPattern" value="3+2+2" />
-  <label>Repeats:</label>
-  <input type="number" class="polyRepeats" value="3" min="1" />
-  <label>BPM:</label>
-  <input type="number" class="polyBPM" value="120" min="10" max="600" />
-  <label>Sound:</label>
-  <select class="polySound">
-    <option value="sine1">sine1</option>
-    <option value="sine2">sine2</option>
-    <option value="sine3">sine3</option>
-  </select>
-  <label><span data-i18n="Only First Tick">Only First Tick</span>: <input type="checkbox" class="polyOnlyFirst" /></label>
-  <button class="removePoly">–</button>
-`;
-
-  const baseSelect = createPolyBaseNoteSelect();
-  const bpmField = container.querySelector('.polyBPM');
-  const soundField = container.querySelector('.polySound');
-
-  if (soundField && soundField.parentNode) {
-    let soundLabel = soundField.previousElementSibling;
-    while (soundLabel && soundLabel.tagName !== 'LABEL') {
-      soundLabel = soundLabel.previousElementSibling;
-    }
-
-const baseLabelEl = document.createElement('label');
-baseLabelEl.setAttribute('data-i18n', 'baseNoteLabel');
-const curLang = (document.getElementById('langSelect') && document.getElementById('langSelect').value) || 'en';
-baseLabelEl.textContent = (translations && translations[curLang] && translations[curLang]['baseNoteLabel']) || 'Base Note:';
-
-
-    if (soundLabel && soundLabel.parentNode) {
-      soundLabel.parentNode.insertBefore(baseLabelEl, soundLabel);
-      soundLabel.parentNode.insertBefore(baseSelect, soundLabel);
-    } else if (bpmField && bpmField.parentNode) {
-      bpmField.parentNode.insertBefore(baseLabelEl, bpmField.nextSibling);
-      bpmField.parentNode.insertBefore(baseSelect, baseLabelEl.nextSibling);
-    } else {
-      container.appendChild(baseLabelEl);
-      container.appendChild(baseSelect);
-    }
-  } else if (bpmField && bpmField.parentNode) {
-    bpmField.parentNode.insertBefore(baseSelect, bpmField.nextSibling);
-  } else {
-    container.appendChild(baseSelect);
-  }
-
+  container.innerHTML = `
+    <label>Pattern:</label>
+    <input type="text" class="polyPattern" value="3+2+2" />
+    <label>Repeats:</label>
+    <input type="number" class="polyRepeats" value="3" min="1" />
+    <label>BPM:</label>
+    <input type="number" class="polyBPM" value="120" min="10" max="600" />
+    <label>Sound:</label>
+    <select class="polySound">
+      <option value="sine1">sine1</option>
+      <option value="sine2">sine2</option>
+      <option value="sine3">sine3</option>
+    </select>
+    <button class="removePoly">–</button>
+  `;
   container.querySelector(".removePoly").addEventListener("click", () => container.remove());
-
   document.getElementById("polyrhythmList").appendChild(container);
 
-  const langSel = document.getElementById("langSelect");
-  if (langSel && langSel.value === "fa") {
-    langSel.dispatchEvent(new Event("change"));
+  // اگه زبان فارسی فعاله، متن‌ها ترجمه بشن
+  if (document.getElementById("langSelect").value === "fa") {
+    document.getElementById("langSelect").dispatchEvent(new Event("change"));
+  }
+});
+
+// رویداد کشیدن توپک اسلایدر
+document.getElementById("mainBPM").addEventListener("input", updateBpmDisplay);
+
+// دکمه افزایش BPM
+document.getElementById("bpmIncrease").addEventListener("click", () => {
+  const bpmSlider = document.getElementById("mainBPM");
+  bpmSlider.value = Math.min(600, parseInt(bpmSlider.value) + 1);
+  updateBpmDisplay();
+});
+
+// دکمه کاهش BPM
+document.getElementById("bpmDecrease").addEventListener("click", () => {
+  const bpmSlider = document.getElementById("mainBPM");
+  bpmSlider.value = Math.max(10, parseInt(bpmSlider.value) - 1);
+  updateBpmDisplay();
+});
+
+// دکمه شروع پخش
+document.getElementById("startBtn").addEventListener("click", async () => {
+  if (isPlaying) return;
+  isPlaying = true;
+  stopRequested = false;
+
+  const loopCount = parseInt(document.getElementById("loopCount").value) || 1;
+
+  for (let loop = 0; loop < loopCount; loop++) {
+    if (stopRequested) break;
+
+    // اجرای ریتم اصلی
+    const mainPattern = parsePattern(document.getElementById("mainPattern").value);
+    const mainRepeats = parseInt(document.getElementById("mainRepeats").value);
+    const mainBPM = parseInt(document.getElementById("mainBPM").value);
+    await playPattern(mainPattern, mainBPM, mainRepeats, "sine1");
+
+    // اجرای پلی‌ریتم‌ها
+    const polyBoxes = document.querySelectorAll(".polyBox");
+    for (let box of polyBoxes) {
+      if (stopRequested) break;
+      const pattern = parsePattern(box.querySelector(".polyPattern").value);
+      const repeats = parseInt(box.querySelector(".polyRepeats").value);
+      const bpm = parseInt(box.querySelector(".polyBPM").value);
+      const preset = box.querySelector(".polySound").value;
+      await playPattern(pattern, bpm, repeats, preset);
+    }
+  }
+
+  isPlaying = false;
+});
+
+// دکمه توقف
+document.getElementById("stopBtn").addEventListener("click", () => {
+  stopRequested = true;
+  isPlaying = false;
+});
+
+// 🔹 ترجمه‌های رابط کاربری
+const translations = {
+  en: {
+    "Main Rhythm": "Main Rhythm",
+    "Pattern (e.g. 2+3+2):": "Pattern (e.g. 2+3+2):",
+    "Repeat Count (before polyrhythms):": "Repeat Count (before polyMeter):",
+    "Main BPM:": "Main BPM:",
+    "Polyrhythms": "PolyMeter",
+    "+ Add Polyrhythm": "+ Add PolyMeter",
+    "Loop Count (number of full cycles):": "Loop Count :",
+    "Start": "Start",
+    "Stop": "Stop",
+    "Language:": "Language:",
+    "Theme:": "Theme:",
+    "Yellow": "Yellow",
+    "Blue": "Blue",
+    "Red": "Red",
+    "Green": "Green",
+    "Purple": "Purple",
+    "Only First Tick": "Only First Tick",
+    "loopCountLabel": "loopCountLabel",
+    "Pattern:": "Pattern:",
+    "Repeats:": "Repeats:",
+    "BPM:": "BPM:",
+    "Sound:": "Sound:",
+    "Polyrhythm Time Calculator": "Polyrhythm Time Calculator",
+    "First Rhythm:": "First Rhythm:",
+    "Second Rhythm:": "Second Rhythm:",
+    "BPM 1:": "BPM 1:",
+    "Measures of Rhythm 1:": "Measures of Rhythm 1:",
+    "Measures of Rhythm 2 (optional):": "Measures of Rhythm 2 (optional):",
+    "BPM 2 (optional):": "BPM 2 (optional):",
+    "Calculate": "Calculate",
+    "Auto": "Auto Replace",
+    "Result:": "Result:",
+  },
+  fa: {
+    "Main Rhythm": "ریتم اصلی",
+    "Pattern (e.g. 2+3+2):": "الگو (مثلاً ۲+۳+۲):",
+    "Repeat Count (before polyrhythms):": "تعداد تکرار ریتم اصلی:",
+    "Main BPM:": "سرعت (BPM):",
+    "Polyrhythms": "پلی‌مترها",
+    "+ Add Polyrhythm": "+ افزودن پلی‌متر",
+    "Loop Count (number of full cycles):": "تعداد تکرار:",
+    "Start": "شروع",
+    "Stop": "توقف",
+    "Language:": "زبان:",
+    "Theme:": "تم:",
+    "Yellow": "زرد",
+    "Blue": "آبی",
+    "Red": "قرمز",
+    "Green": "سبز",
+    "Purple": "بنفش",
+    "Only First Tick": "فقط ضرب اول",
+    "loopCountLabel": "تکرار کل ریتم",
+    "Pattern:": "الگو:",
+    "Repeats:": "تکرار:",
+    "BPM:": "سرعت:",
+    "Sound:": "صدا:",
+    "Polyrhythm Time Calculator": "ماشین‌حساب زمان پلی‌ریتم",
+    "First Rhythm:": "ریتم اول:",
+    "Second Rhythm:": "ریتم دوم:",
+    "BPM 1:": "سرعت ۱ (BPM):",
+    "Measures of Rhythm 1:": "تعداد میزان‌های ریتم اول:",
+    "Measures of Rhythm 2 (optional):": "تعداد میزان‌های ریتم دوم (اختیاری):",
+    "BPM 2 (optional):": "سرعت ۲ (BPM) (اختیاری):",
+    "Calculate": "محاسبه",
+    "Auto": "جایگزاری خودکار",
+    "Result:": "پاسخ:",
+  }
+};
+
+// 🔹 تابع برای اعمال ترجمه بر اساس زبان انتخاب‌شده
+function applyTranslation(lang) {
+  const dict = translations[lang];
+
+  // ترجمه‌ی متن‌های ثابت داخل تگ‌ها (همان کد شما)
+  for (const [enText, transText] of Object.entries(dict)) {
+    const elements = Array.from(document.querySelectorAll("*")).filter(
+      el => el.childNodes.length === 1 && (
+        el.textContent.trim() === translations.en[enText] ||
+        el.textContent.trim() === translations.fa[enText] ||
+        el.textContent.trim() === enText
+      )
+    );
+    for (let el of elements) {
+      el.textContent = transText;
+    }
+  }
+
+  // ترجمه گزینه‌های select (مثل تم و زبان)
+  const selectOptions = document.querySelectorAll("select option");
+  selectOptions.forEach(option => {
+    const original = option.value.trim();
+    if (dict[original]) {
+      option.textContent = dict[original];
+    }
+  });
+
+  // ترجمه بر اساس id اگر لازم بود
+  for (const key in dict) {
+    const el = document.getElementById(key);
+    if (el) {
+      el.textContent = dict[key];
+    }
+  }
+
+  // *** ترجمه placeholder های input ها ***
+  const placeholders = [
+    {id: "num1", key: "Beats (e.g., 5)"},
+    {id: "den1", key: "Unit (e.g., 4)"},
+    {id: "num2", key: "Beats (e.g., 3)"},
+    {id: "den2", key: "Unit (e.g., 8)"},
+    {id: "bpm1", key: "e.g., 80"},
+    {id: "measures1", key: "e.g., 10"},
+    {id: "measures2", key: "leave blank to calculate"},
+    {id: "bpm2", key: "leave blank to calculate"},
+  ];
+
+  placeholders.forEach(({id, key}) => {
+    const el = document.getElementById(id);
+    if (el && dict[key]) {
+      el.placeholder = dict[key];
+    }
+  });
+
+  // تغییر جهت متن صفحه
+  document.body.dir = lang === "fa" ? "rtl" : "ltr";
+}
+
+
+// 🔹 رویداد تغییر زبان
+document.getElementById("langSelect").addEventListener("change", () => {
+  const selectedLang = document.getElementById("langSelect").value;
+  applyTranslation(selectedLang);
+});
+
+// 🔹 اعمال ترجمه پیش‌فرض بر اساس مقدار اولیه
+window.addEventListener("DOMContentLoaded", () => {
+  const defaultLang = document.getElementById("langSelect").value;
+  applyTranslation(defaultLang);
+});                   
+
+
+// راهنمای علامت سؤال
+const helpIcon = document.getElementById("helpIcon");
+const tooltip = document.getElementById("helpTooltip");
+
+helpIcon.addEventListener("mouseenter", () => {
+  tooltip.style.display = "block";
+});
+helpIcon.addEventListener("mouseleave", () => {
+  tooltip.style.display = "none";
+});
+// اجرای اولیه
+updateBpmDisplay();
+
+
+
+document.body.className = "blue-theme";
+
+
+
+const themeSelect = document.getElementById("themeSelect");
+
+themeSelect.addEventListener("change", () => {
+  const theme = themeSelect.value;
+
+  // پاک‌کردن کلاس‌های قبلی
+  document.body.classList.remove("theme-dark-yellow", "theme-dark-blue", "theme-light-green");
+
+  // اضافه‌کردن کلاس جدید
+  document.body.classList.add(`theme-${theme}`);
+});
+
+
+
+
+
+const themes = {
+  yellow: '#ffcc00',
+  blue: '#00f4fc',
+  red: '#de1b1b',
+  green: '#00cc44',
+  purple: '#e502fa'
+};
+
+function applyTheme(color) {
+  document.documentElement.style.setProperty('--x', color);
+
+  const borderColor = shadeColor(color, -30); 
+  document.documentElement.style.setProperty('--x-border', borderColor);
+
+  const hoverColor = shadeColor(color, -15);
+  document.documentElement.style.setProperty('--x-hover', hoverColor);
+
+  document.querySelectorAll('.container').forEach(box => {
+    box.style.boxShadow = `0 0 30px ${color}80`;
+  });
+
+  const helpIcon = document.getElementById('helpIcon');
+  if (helpIcon) helpIcon.style.color = color;
+}
+
+// مقدار اولیه تم زرد
+applyTheme(themes.yellow);
+
+document.getElementById('themeSelect').addEventListener('change', e => {
+  const selected = e.target.value;
+  if (themes[selected]) {
+    applyTheme(themes[selected]);
   }
 });
 
@@ -362,29 +369,18 @@ baseLabelEl.textContent = (translations && translations[curLang] && translations
 
 
 
-// بخش کنترل اسلایدر و دکمه‌های افزایش/کاهش
-document.getElementById("mainBPM").addEventListener("input", updateBpmDisplay);
 
-document.getElementById("bpmIncrease").addEventListener("click", () => {
-  const bpmSlider = document.getElementById("mainBPM");
-  bpmSlider.value = Math.min(600, parseInt(bpmSlider.value, 10) + 1);
-  updateBpmDisplay();
-});
+function shadeColor(color, percent) {
+  const num = parseInt(color.replace("#", ""), 16),
+        amt = Math.round(2.55 * percent),
+        R = (num >> 16) + amt,
+        G = (num >> 8 & 0x00FF) + amt,
+        B = (num & 0x0000FF) + amt;
 
-document.getElementById("bpmDecrease").addEventListener("click", () => {
-  const bpmSlider = document.getElementById("mainBPM");
-  bpmSlider.value = Math.max(10, parseInt(bpmSlider.value, 10) - 1);
-  updateBpmDisplay();
-});
-
-
-
-
-
-
-
-
-
-
-
-
+  return "#" + (
+    0x1000000 +
+    (R < 255 ? (R < 0 ? 0 : R) : 255) * 0x10000 +
+    (G < 255 ? (G < 0 ? 0 : G) : 255) * 0x100 +
+    (B < 255 ? (B < 0 ? 0 : B) : 255)
+  ).toString(16).slice(1);
+}
