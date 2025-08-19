@@ -497,39 +497,22 @@ document.getElementById("calcAutoBtn").addEventListener("click", () => {
 
 
 
-// === Settings Display (Popup) ===
+// === Minimal Rhythm Display (Popup) ===
 (function () {
-  // ---- Add missing translations (EN/FA) for new UI texts ----
-  if (typeof translations === "object" && translations.en && translations.fa) {
-    Object.assign(translations.en, {
-      "Display": "Display",
-      "Settings Summary": "Settings Summary",
-      "Close": "Close",
-      "Loop Count:": "Loop Count:",
-      "Polyrhythm": "Polyrhythm",
-      "No polyrhythms added.": "No polyrhythms added.",
-      "Yes": "Yes",
-      "No": "No"
-    });
-    Object.assign(translations.fa, {
-      "Display": "نمایش",
-      "Settings Summary": "خلاصه تنظیمات",
-      "Close": "بستن",
-      "Loop Count:": "تعداد تکرار:",
-      "Polyrhythm": "پلی‌متر",
-      "No polyrhythms added.": "هیچ پلی‌متری اضافه نشده است.",
-      "Yes": "بله",
-      "No": "خیر"
-    });
-  }
+  // Remove any previous display UI from older snippet if present
+  const oldOverlay = document.getElementById('settingsDisplayOverlay');
+  if (oldOverlay) oldOverlay.remove();
+  const oldStyles = document.getElementById('settingsDisplayStyles');
+  if (oldStyles) oldStyles.remove();
+  const oldBtn = document.getElementById('displayBtn');
+  if (oldBtn) oldBtn.remove();
 
-  // ---- Styles ----
   function injectStyles() {
-    if (document.getElementById("settingsDisplayStyles")) return;
-    const style = document.createElement("style");
-    style.id = "settingsDisplayStyles";
+    if (document.getElementById('rhythmDisplayStyles')) return;
+    const style = document.createElement('style');
+    style.id = 'rhythmDisplayStyles';
     style.textContent = `
-      #settingsDisplayOverlay {
+      #rhythmDisplayOverlay {
         position: fixed;
         inset: 0;
         background: rgba(0,0,0,0.45);
@@ -538,265 +521,167 @@ document.getElementById("calcAutoBtn").addEventListener("click", () => {
         justify-content: center;
         z-index: 9999;
       }
-      #settingsDisplayModal {
+      #rhythmDisplayModal {
         background: #141414;
         color: #fff;
-        max-width: 720px;
+        max-width: 680px;
         width: 92vw;
         max-height: 85vh;
         overflow: auto;
         border: 1px solid var(--x);
         box-shadow: 0 0 30px var(--x);
         border-radius: 12px;
-        padding: 14px 18px;
+        padding: 16px;
       }
-      #settingsDisplayHeader {
-        display: flex;
+      #rhythmDisplayTable {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 10px 40px;
+        justify-items: center;
         align-items: center;
-        justify-content: space-between;
-        margin-bottom: 8px;
+        text-align: center;
+        margin: 0 auto;
       }
-      #settingsDisplayTitle {
-        font-size: 18px;
+      .rd-header {
         font-weight: 700;
         color: var(--x);
-        margin: 0;
       }
-      #settingsDisplayClose {
-        background: transparent;
-        border: 1px solid var(--x);
-        color: var(--x);
-        padding: 6px 10px;
-        border-radius: 8px;
-        cursor: pointer;
-      }
-      #settingsDisplayClose:hover { background: var(--x); color: #000; }
-      .sd-section {
-        border-top: 1px solid #2a2a2a;
-        padding-top: 10px;
-        margin-top: 10px;
-      }
-      .sd-section:first-of-type {
-        border-top: none;
-        padding-top: 0;
-        margin-top: 0;
-      }
-      .sd-section-title {
-        font-weight: 700;
-        color: var(--x);
-        margin: 6px 0 8px 0;
-      }
-      .sd-item {
-        margin: 6px 0;
-        line-height: 1.5;
-      }
-      .sd-item strong {
-        color: var(--x);
-        font-weight: 700;
-      }
-      .sd-subtitle {
-        margin: 10px 0 4px 0;
-        font-weight: 700;
-        color: var(--x);
+      .rd-cell {
+        white-space: pre;
       }
       #displayBtn {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        background: transparent;
         border: 1px solid var(--x);
         color: var(--x);
-        padding: 8px 14px;
-        border-radius: 10px;
+        background: transparent;
+        border-radius: 8px;
+        padding: 6px 12px;
         cursor: pointer;
-        z-index: 9998;
+        margin-left: 8px;
       }
       #displayBtn:hover { background: var(--x); color: #000; }
     `;
     document.head.appendChild(style);
   }
 
-  // ---- UI: Overlay + Modal + Button ----
   function createUI() {
-    if (document.getElementById("settingsDisplayOverlay")) return;
+    if (!document.getElementById('rhythmDisplayOverlay')) {
+      const overlay = document.createElement('div');
+      overlay.id = 'rhythmDisplayOverlay';
+      const modal = document.createElement('div');
+      modal.id = 'rhythmDisplayModal';
+      const table = document.createElement('div');
+      table.id = 'rhythmDisplayTable';
+      modal.appendChild(table);
+      overlay.appendChild(modal);
+      document.body.appendChild(overlay);
 
-    // Overlay
-    const overlay = document.createElement("div");
-    overlay.id = "settingsDisplayOverlay";
-
-    // Modal
-    const modal = document.createElement("div");
-    modal.id = "settingsDisplayModal";
-
-    // Header
-    const header = document.createElement("div");
-    header.id = "settingsDisplayHeader";
-
-    const title = document.createElement("h2");
-    title.id = "settingsDisplayTitle";
-    title.textContent = "Settings Summary";
-
-    const closeBtn = document.createElement("button");
-    closeBtn.id = "settingsDisplayClose";
-    closeBtn.type = "button";
-    closeBtn.textContent = "Close";
-
-    header.appendChild(title);
-    header.appendChild(closeBtn);
-
-    // Content
-    const content = document.createElement("div");
-    content.id = "settingsDisplayContent";
-
-    modal.appendChild(header);
-    modal.appendChild(content);
-    overlay.appendChild(modal);
-    document.body.appendChild(overlay);
-
-    // Button
-    if (!document.getElementById("displayBtn")) {
-      const btn = document.createElement("button");
-      btn.id = "displayBtn";
-      btn.type = "button";
-      btn.textContent = "Display";
-      document.body.appendChild(btn);
-
-      btn.addEventListener("click", () => {
-        renderSettingsSummary();
-        overlay.style.display = "flex";
+      overlay.addEventListener('click', e => {
+        if (e.target === overlay) overlay.style.display = 'none';
+      });
+      document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') overlay.style.display = 'none';
       });
     }
 
-    // Close events
-    closeBtn.addEventListener("click", () => overlay.style.display = "none");
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) overlay.style.display = "none";
+    let button = document.getElementById('displayBtn');
+    if (!button) {
+      button = document.createElement('button');
+      button.id = 'displayBtn';
+      button.type = 'button';
+      button.textContent = 'Display';
+    } else {
+      button.remove();
+    }
+
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+
+    if (stopBtn && stopBtn.parentNode) {
+      stopBtn.parentNode.insertBefore(button, stopBtn.nextSibling);
+    } else if (startBtn && startBtn.parentNode) {
+      startBtn.parentNode.insertBefore(button, startBtn.nextSibling);
+    } else {
+      document.body.appendChild(button);
+    }
+
+    button.addEventListener('click', () => {
+      renderRhythmDisplay();
+      document.getElementById('rhythmDisplayOverlay').style.display = 'flex';
     });
   }
 
-  // ---- Helpers to build rows ----
-  function makeItem(labelText, valueText) {
-    const row = document.createElement("div");
-    row.className = "sd-item";
-    const label = document.createElement("strong");
-    label.textContent = labelText;
-    const value = document.createElement("span");
-    value.textContent = " " + (valueText != null && valueText !== "" ? valueText : "—");
-    row.appendChild(label);
-    row.appendChild(value);
-    return row;
-  }
+  function getRows() {
+    const rows = [];
 
-  function makeSectionTitle(text) {
-    const el = document.createElement("div");
-    el.className = "sd-section-title";
-    el.textContent = text;
-    return el;
-  }
+    const mainPatternInput = document.getElementById('mainPattern');
+    const mainRepeatsInput = document.getElementById('mainRepeats');
+    const mainBpmInput = document.getElementById('mainBPM');
 
-  // ---- Read current settings and render into modal ----
-  function renderSettingsSummary() {
-    const content = document.getElementById("settingsDisplayContent");
-    if (!content) return;
-    content.innerHTML = "";
-
-    // Get main controls
-    const mainPatternInput = document.getElementById("mainPattern");
-    const mainRepeatsInput = document.getElementById("mainRepeats");
-    const mainBpmInput = document.getElementById("mainBPM");
-    const loopCountInput = document.getElementById("loopCount");
-    const onlyFirstTickInput = document.getElementById("onlyFirstTick");
-
-    const mainPatternStr = mainPatternInput ? String(mainPatternInput.value || "") : "";
-    const normalizedPattern = (parsePattern ? parsePattern(mainPatternStr).join(" + ") : mainPatternStr);
-
-    const mainSection = document.createElement("div");
-    mainSection.className = "sd-section";
-    mainSection.appendChild(makeSectionTitle("Main Rhythm"));
-    mainSection.appendChild(makeItem("Pattern:", normalizedPattern || "—"));
-    mainSection.appendChild(makeItem("BPM:", mainBpmInput ? String(mainBpmInput.value || "—") : "—"));
-    mainSection.appendChild(makeItem("Repeats:", mainRepeatsInput ? String(mainRepeatsInput.value || "—") : "—"));
-    mainSection.appendChild(makeItem("Loop Count:", loopCountInput ? String(loopCountInput.value || "—") : "—"));
-
-    if (onlyFirstTickInput) {
-      // Put raw "Yes"/"No" so applyTranslation can replace
-      const yesNo = onlyFirstTickInput.checked ? "Yes" : "No";
-      const row = makeItem("Only First Tick", yesNo);
-      mainSection.appendChild(row);
+    const mainPatternStr = mainPatternInput ? String(mainPatternInput.value || '') : '';
+    const mainPatternArr = typeof parsePattern === 'function' ? parsePattern(mainPatternStr) : [];
+    const mainPatternDisplay = mainPatternArr.length ? mainPatternArr.join('+') : mainPatternStr.replace(/\s+/g, '');
+    const mainBpm = mainBpmInput ? String(mainBpmInput.value || '') : '';
+    const mainRepeats = mainRepeatsInput ? String(mainRepeatsInput.value || '') : '';
+    if (mainPatternDisplay || mainBpm || mainRepeats) {
+      rows.push([mainPatternDisplay, mainBpm, mainRepeats]);
     }
 
-    content.appendChild(mainSection);
+    const polyBoxes = document.querySelectorAll('.polyBox');
+    polyBoxes.forEach(box => {
+      const p = box.querySelector('.polyPattern');
+      const r = box.querySelector('.polyRepeats');
+      const b = box.querySelector('.polyBPM');
 
-    // Polyrhythms
-    const polySection = document.createElement("div");
-    polySection.className = "sd-section";
-    polySection.appendChild(makeSectionTitle("Polyrhythms"));
+      const pStr = p ? String(p.value || '') : '';
+      const arr = typeof parsePattern === 'function' ? parsePattern(pStr) : [];
+      const pat = arr.length ? arr.join('+') : pStr.replace(/\s+/g, '');
+      const bpm = b ? String(b.value || '') : '';
+      const rep = r ? String(r.value || '') : '';
+      rows.push([pat, bpm, rep]);
+    });
 
-    const polyBoxes = document.querySelectorAll(".polyBox");
-    if (!polyBoxes || polyBoxes.length === 0) {
-      const none = document.createElement("div");
-      none.className = "sd-item";
-      none.textContent = "No polyrhythms added.";
-      polySection.appendChild(none);
-    } else {
-      let idx = 0;
-      polyBoxes.forEach((box) => {
-        idx += 1;
-        const subtitle = document.createElement("div");
-        subtitle.className = "sd-subtitle";
-
-        const labelSpan = document.createElement("span");
-        labelSpan.textContent = "Polyrhythm";
-
-        const numSpan = document.createElement("span");
-        numSpan.textContent = " #" + idx;
-
-        subtitle.appendChild(labelSpan);
-        subtitle.appendChild(numSpan);
-        polySection.appendChild(subtitle);
-
-        const patternInput = box.querySelector(".polyPattern");
-        const repeatsInput = box.querySelector(".polyRepeats");
-        const bpmInput = box.querySelector(".polyBPM");
-        const soundSelect = box.querySelector(".polySound");
-
-        const patStr = patternInput ? String(patternInput.value || "") : "";
-        const patNormalized = (parsePattern ? parsePattern(patStr).join(" + ") : patStr);
-
-        polySection.appendChild(makeItem("Pattern:", patNormalized || "—"));
-        polySection.appendChild(makeItem("BPM:", bpmInput ? String(bpmInput.value || "—") : "—"));
-        polySection.appendChild(makeItem("Repeats:", repeatsInput ? String(repeatsInput.value || "—") : "—"));
-        polySection.appendChild(makeItem("Sound:", soundSelect ? String(soundSelect.value || "—") : "—"));
-      });
-    }
-
-    content.appendChild(polySection);
-
-    // Translate dynamic content to current language (if available)
-    try {
-      const langSelect = document.getElementById("langSelect");
-      if (langSelect && typeof applyTranslation === "function") {
-        applyTranslation(langSelect.value);
-      }
-    } catch (_) {}
+    return rows;
   }
 
-  // ---- Init ----
-  function initSettingsDisplay() {
+  function renderRhythmDisplay() {
+    const table = document.getElementById('rhythmDisplayTable');
+    if (!table) return;
+    table.innerHTML = '';
+
+    // Header (only these three words)
+    ['پترن', 'سرعت', 'میزان'].forEach(text => {
+      const cell = document.createElement('div');
+      cell.className = 'rd-cell rd-header';
+      cell.textContent = text;
+      table.appendChild(cell);
+    });
+
+    // Rows
+    const rows = getRows();
+    rows.forEach(([pat, bpm, rep]) => {
+      const c1 = document.createElement('div');
+      c1.className = 'rd-cell';
+      c1.textContent = pat || '';
+      const c2 = document.createElement('div');
+      c2.className = 'rd-cell';
+      c2.textContent = bpm || '';
+      const c3 = document.createElement('div');
+      c3.className = 'rd-cell';
+      c3.textContent = rep || '';
+      table.appendChild(c1);
+      table.appendChild(c2);
+      table.appendChild(c3);
+    });
+  }
+
+  function init() {
     injectStyles();
     createUI();
-    // Ensure initial translation applies to newly created elements
-    try {
-      const langSelect = document.getElementById("langSelect");
-      if (langSelect && typeof applyTranslation === "function") {
-        applyTranslation(langSelect.value);
-      }
-    } catch (_) {}
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initSettingsDisplay);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
   } else {
-    initSettingsDisplay();
+    init();
   }
 })();
