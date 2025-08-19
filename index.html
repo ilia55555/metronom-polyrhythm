@@ -6,150 +6,51 @@
   <title>Polyrhythm Metronome</title>
   <link rel="stylesheet" href="style.css" />
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#1e1e1e">
+<meta name="theme-color" content="#1e1e1e">
 </head>
 <body>
   <h1>PolyMetronome</h1>
 
   <!-- 🔹 بخش مترونوم اصلی -->
-  <div class="container" id="mainContainer">
-    <h2 data-i18n="mainRhythmTitle">Main Rhythm</h2>
+  <div class="container">
+    <h2>Main Rhythm</h2>
 
-    <label data-i18n="patternLabel">Pattern (e.g. 2+3+2):</label>
+    <label>Pattern (e.g. 2+3+2):</label>
     <input type="text" id="mainPattern" value="2+3+2" />
 
-    <label data-i18n="repeatsLabel">Repeat Count (before polyrhythms):</label>
+    <label>Repeat Count (before polyrhythms):</label>
     <input type="number" id="mainRepeats" value="5" min="1" />
 
-    <label data-i18n="mainBpmLabel">Main BPM:</label>
-    <div class="bpm-control">
-      <button id="bpmDecrease" data-i18n="bpm_decrease">-</button>
+    <label>Main BPM:</label>
+<div class="bpm-control">
+      <button id="bpmDecrease">-</button>
       <input type="range" id="mainBPM" min="10" max="600" value="120" />
-      <button id="bpmIncrease" data-i18n="bpm_increase">+</button>
+      <button id="bpmIncrease">+</button>
       <span id="bpmDisplay">120 BPM</span>
     </div>
-
-    <!-- ===== Mobile-only horizontal scroller (HTML only; CSS/JS will control visibility & behavior) =====
-         - This block is intentionally added *in addition* to the original .bpm-control above.
-         - Do NOT remove or rename existing IDs like #mainBPM, #bpmDecrease, #bpmIncrease — they remain for desktop.
-         - The mobile scroller uses its own IDs (safe, no collisions): bpmDecreaseBig, bpmIncreaseBig, mobileScroller, scrollerViewport, scrollerTrack, scrollerPrev, scrollerCurrent, scrollerNext, scrollerInlineInput.
-         - Add CSS/JS later to show this scroller only on mobile (<=699px) and to hide/disable the original desktop slider on mobile.
-    -->
-    <div id="bpmControlWrapper" aria-hidden="true">
-      <button id="bpmDecreaseBig" class="bpm-btn bpm-btn-decrease" aria-label="Decrease BPM">−</button>
-
-      <div id="bpmCenter">
-        <div id="mobileScroller" class="bpm-device" aria-hidden="true">
-          <div id="scrollerViewport">
-            <div id="scrollerTrack">
-              <div class="scrollerItem scrollerPrev" id="scrollerPrev">119</div>
-              <div class="scrollerItem scrollerCurrent" id="scrollerCurrent" tabindex="0" role="spinbutton" aria-valuemin="1" aria-valuemax="1000" aria-valuenow="120">120</div>
-              <div class="scrollerItem scrollerNext" id="scrollerNext">121</div>
-            </div>
-
-            <!-- Inline editor placed over center number (hidden by default; JS will toggle) -->
-            <input id="scrollerInlineInput" class="scroller-inline-input" type="number" inputmode="numeric" min="1" max="1000" aria-label="Edit BPM inline" autocomplete="off" style="display:none;" />
-          </div>
-        </div>
-      </div>
-
-      <button id="bpmIncreaseBig" class="bpm-btn bpm-btn-increase" aria-label="Increase BPM">+</button>
-
-      <!-- fallback overlay (kept for compatibility; you can style/remove later) -->
-      <div id="bpmEditOverlay" aria-hidden="true" style="display:none;">
-        <div id="bpmEditBox">
-          <label for="bpmEditInput">Set BPM (1–1000)</label>
-          <input id="bpmEditInput" type="number" min="1" max="1000" value="120">
-          <div class="edit-actions">
-            <button id="bpmEditCancel">Cancel</button>
-            <button id="bpmEditSave">Save</button>
-          </div>
-        </div>
-      </div>
-    </div>
-    <!-- ===== end mobile scroller block ===== -->
-
-    <!-- انتخاب نت پایه برای ریتم اصلی (حالا value کلید متنی است؛ مقدار عددی در data-quarters) -->
-    <label for="baseNoteSelect" data-i18n="base_note_label">Base Note for BPM:</label>
-    <select id="baseNoteSelect" class="polyBaseNote">
-      <option value="whole" data-quarters="1" data-i18n="whole">whole</option>
-      <option value="dottedWhole" data-quarters="3" data-i18n="dottedWhole">dottedWhole</option>
-      <option value="half" data-quarters="1" data-i18n="half">half</option>
-      <option value="dottedHalf" data-quarters="3" data-i18n="dottedHalf">dottedHalf</option>
-      <option value="quarter" selected data-quarters="1" data-i18n="quarter">quarter</option>
-      <option value="dottedQuarter" data-quarters="3" data-i18n="dottedQuarter">dottedQuarter</option>
-      <option value="eighth" data-quarters="1" data-i18n="eighth">eighth</option>
-      <option value="dottedEighth" data-quarters="3" data-i18n="dottedEighth">dottedEighth</option>
-      <option value="sixteenth" data-quarters="1" data-i18n="sixteenth">sixteenth</option>
-      <option value="dottedSixteenth" data-quarters="3" data-i18n="dottedSixteenth">dottedSixteenth</option>
-      <option value="thirtySecond" data-quarters="1" data-i18n="thirtySecond">thirtySecond</option>
-      <option value="dottedThirtySecond" data-quarters="3" data-i18n="dottedThirtySecond">dottedThirtySecond</option>
-      <option value="sixtyFourth" data-quarters="1" data-i18n="sixtyFourth">sixtyFourth</option>
-      <option value="dottedSixtyFourth" data-quarters="3" data-i18n="dottedSixtyFourth">dottedSixtyFourth</option>
-    </select>
   </div>
-
 
   <!-- 🔹 بخش پلی‌ریتم‌ها -->
-  <div class="container" id="polyContainer">
-    <h2 data-i18n="polyrhythmsTitle">Polyrhythms</h2>
+  <div class="container">
+    <h2>Polyrhythms</h2>
     <div id="polyrhythmList"></div>
-    <button id="addPolyrhythm" data-i18n="addPolyrhythm">+ Add Polyrhythm</button>
+    <button id="addPolyrhythm">+ Add Polyrhythm</button>
   </div>
 
-  <!-- template برای ایجاد باکس‌های پلی‌ریتم (شما می‌تونی این template را در JS clone کنی) -->
-  <template id="poly-template">
-    <div class="polyBox">
-      <label data-i18n="patternLabel">Pattern:</label>
-      <input type="text" class="polyPattern" value="3+2+2" />
-      <label data-i18n="repeatsLabel">Repeats:</label>
-      <input type="number" class="polyRepeats" value="3" min="1" />
-    <label data-i18n="baseNoteLabel">Base Note:</label>
-      <select class="polyBaseNote">
-        <option value="whole" data-quarters="4" data-i18n="whole">whole</option>
-        <option value="dottedWhole" data-quarters="6" data-i18n="dottedWhole">dottedWhole</option>
-        <option value="half" data-quarters="2" data-i18n="half">half</option>
-        <option value="dottedHalf" data-quarters="3" data-i18n="dottedHalf">dottedHalf</option>
-        <option value="quarter" selected data-quarters="1" data-i18n="quarter">quarter</option>
-        <option value="dottedQuarter" data-quarters="1.5" data-i18n="dottedQuarter">dottedQuarter</option>
-        <option value="eighth" data-quarters="0.5" data-i18n="eighth">eighth</option>
-        <option value="dottedEighth" data-quarters="0.3333333333333333" data-i18n="dottedEighth">dottedEighth</option>
-        <option value="sixteenth" data-quarters="0.25" data-i18n="sixteenth">sixteenth</option>
-        <option value="dottedSixteenth" data-quarters="0.16666666666666666" data-i18n="dottedSixteenth">dottedSixteenth</option>
-        <option value="thirtySecond" data-quarters="0.125" data-i18n="thirtySecond">thirtySecond</option>
-        <option value="dottedThirtySecond" data-quarters="0.08333333333333333" data-i18n="dottedThirtySecond">dottedThirtySecond</option>
-        <option value="sixtyFourth" data-quarters="0.0625" data-i18n="sixtyFourth">sixtyFourth</option>
-        <option value="dottedSixtyFourth" data-quarters="0.041666666666666664" data-i18n="dottedSixtyFourth">dottedSixtyFourth</option>
-      </select>
-      <label data-i18n="bpmLabel">BPM:</label>
-      <input type="number" class="polyBPM" value="120" min="1" />
-      <label data-i18n="soundLabel">Sound:</label>
-      <select class="polySound">
-        <option value="sine1">sine1</option>
-        <option value="sine2">sine2</option>
-        <option value="sine3">sine3</option>
-      </select>
-      <button class="removePoly" data-i18n="remove">–</button>
-    </div>
-  </template>
 
  <!-- 🔹 کنترل‌های اصلی -->
- <div class="container" style="position: relative;">
+<div class="container" style="position: relative;">
   <label id="loopCountLabel">Loop Count:</label>
   <input type="number" id="loopCount" value="1" min="1" />
 
   <div class="controls">
-    <button id="startBtn" data-i18n="start">Start</button>
-    <button id="stopBtn" data-i18n="stop">Stop</button>
+    <button id="startBtn">Start</button>
+    <button id="stopBtn">Stop</button>
     <label style="display: flex; align-items: center; gap: 5px;">
-
+      <input type="checkbox" id="onlyFirstTick" />
+      <span>Only First Tick</span>
     </label>
   </div>
-<!-- تایمر" -->
-<div id="smallTimer"
-     style="font-size:0.75rem; color:var(--small-timer-color,#dcdcdc); display:none; margin-top:6px; text-align:right; min-width:72px;"
-     aria-hidden="true">00:00.00</div>
-<div id="controls">
 
   <!-- خط جداکننده -->
   <hr style="border: none; height: 2px; background-color:#333333; margin:20px 0;" />
@@ -172,57 +73,54 @@
     </select>
   </div>
 
-  <!-- 🔹 علامت سوال و راهنما -->
-  <span id="helpIcon" title="راهنما">?</span>
-  <div id="helpTooltip">
-    🎵 <b>راهنمای استفاده از مترونوم:</b><br/><br/>
-    <b>۱. ریتم اصلی:</b><br/>
-    - الگوی ریتم را وارد کنید (مثلاً ۲+۳+۲)<br/>
-    - سرعت (BPM) و تعداد میزان‌ها را مشخص کنید<br/>
-    - این ریتم فقط یک‌بار اجرا می‌شود (مگر اینکه لوپ فعال شود)<br/><br/>
+<!-- 🔹 علامت سوال و راهنما -->
+<span id="helpIcon" title="راهنما">?</span>
+<div id="helpTooltip">
+  🎵 <b>راهنمای استفاده از مترونوم:</b><br/><br/>
+  <b>۱. ریتم اصلی:</b><br/>
+  - الگوی ریتم را وارد کنید (مثلاً ۲+۳+۲)<br/>
+  - سرعت (BPM) و تعداد میزان‌ها را مشخص کنید<br/>
+  - این ریتم فقط یک‌بار اجرا می‌شود (مگر اینکه لوپ فعال شود)<br/><br/>
 
-    <b>۲. پلی‌ریتم‌ها:</b><br/>
-    - بعد از پایان ریتم اصلی، پلی‌ریتم‌ها اجرا می‌شوند<br/>
-    - می‌توانید چند پلی‌ریتم با تنظیمات جداگانه (الگو، سرعت، میزان) اضافه کنید<br/><br/>
+  <b>۲. پلی‌ریتم‌ها:</b><br/>
+  - بعد از پایان ریتم اصلی، پلی‌ریتم‌ها اجرا می‌شوند<br/>
+  - می‌توانید چند پلی‌ریتم با تنظیمات جداگانه (الگو، سرعت، میزان) اضافه کنید<br/><br/>
 
-    <b>۳. کنترل اجرا:</b><br/>
-    - گزینه "Loop" برای تکرار کل قطعه (ریتم اصلی + پلی‌ریتم‌ها) است<br/>
-    - گزینه "فقط ضرب اول" باعث می‌شود تنها ضرب اول هر گروه اجرا شود<br/>
-    - با Start اجرا را آغاز و با Stop آن را متوقف کنید
-  </div>
- </div> <!-- ✅ پایان کامل بخش کنترل‌ها -->
- </div>
- </div>
- </div>
- </div>
-  
+  <b>۳. کنترل اجرا:</b><br/>
+  - گزینه "Loop" برای تکرار کل قطعه (ریتم اصلی + پلی‌ریتم‌ها) است<br/>
+  - گزینه "فقط ضرب اول" باعث می‌شود تنها ضرب اول هر گروه اجرا شود<br/>
+  - با Start اجرا را آغاز و با Stop آن را متوقف کنید
+</div>
+</div>
+</div>
+</div>
+</div>
+  </div> <!-- ✅ پایان کامل بخش کنترل‌ها -->
 
- <!-- Play-Rhythm placeholder: the JS will render the box into this element -->
-<div id="playRhythmBox" class="container" aria-label="Play Rhythm box" style="display:block;"></div>
-  </div>
-   </div>
-   </div>
 
-  
- <!-- Box 4: Polyrhythm Calculator -->
- <div class="container">
+
+
+
+<!-- Box 4: Polyrhythm Calculator -->
+<div class="container">
   <h1 id="headerTitle">Polyrhythm Time Calculator</h1>
 
-  <div class="input-group">
-    <label id="firstRhythmLabel">First Rhythm:</label>
-    <span dir="ltr" style="display: inline-flex; align-items: center;">
-      <input type="number" id="num1" placeholder="Beats (e.g., 5)"> / 
-      <input type="number" id="den1" placeholder="Unit (e.g., 4)">
-    </span>
-  </div>
+ <div class="input-group">
+  <label id="firstRhythmLabel">First Rhythm:</label>
+  <span dir="ltr" style="display: inline-flex; align-items: center;">
+    <input type="number" id="num1" placeholder="Beats (e.g., 5)"> / 
+    <input type="number" id="den1" placeholder="Unit (e.g., 4)">
+  </span>
+</div>
 
-  <div class="input-group">
-    <label id="secondRhythmLabel">Second Rhythm:</label>
-    <span dir="ltr" style="display: inline-flex; align-items: center;">
-      <input type="number" id="num2" placeholder="Beats (e.g., 3)"> / 
-      <input type="number" id="den2" placeholder="Unit (e.g., 8)">
-    </span>
-  </div>
+<div class="input-group">
+  <label id="secondRhythmLabel">Second Rhythm:</label>
+  <span dir="ltr" style="display: inline-flex; align-items: center;">
+    <input type="number" id="num2" placeholder="Beats (e.g., 3)"> / 
+    <input type="number" id="den2" placeholder="Unit (e.g., 8)">
+  </span>
+</div>
+
 
   <div class="input-group">
     <label id="labelBpm1">BPM 1:</label>
@@ -249,12 +147,18 @@
     <button id="calcAutoBtn">Auto</button>
   </div>
 
+  
+  <!-- جای نمایش نتیجه -->
   <div class="input-group">
     <label id="resultLabel" style="color: white;">Result:</label>
     <div id="calcResult" style="color: white; font-weight: bold; min-height: 1.2em;"></div>
   </div>
- </div>
+</div>
+
+
+
 
   <script src="script.js"></script>
 </body>
 </html>
+
